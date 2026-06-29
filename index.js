@@ -116,7 +116,9 @@ app.post('/mix', async (req, res) => {
     res.json({ success: true, download_url: downloadUrl });
 
   } catch (err) {
-    console.error(err);
+    console.error("MESSAGE:", err.message);
+console.error("STACK:", err.stack);
+console.error("FULL ERROR:", err);
     fs.rmSync(tmpDir, { recursive: true, force: true });
     res.status(500).json({ success: false, error: err.message });
   }
