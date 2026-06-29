@@ -117,8 +117,17 @@ app.post('/mix', async (req, res) => {
 
   } catch (err) {
     console.error("MESSAGE:", err.message);
-console.error("STACK:", err.stack);
-console.error("FULL ERROR:", err);
+console.error("MESSAGE:", err.message);
+
+if (err.stderr) {
+  console.error("STDERR:");
+  console.error(err.stderr.toString());
+}
+
+if (err.stdout) {
+  console.error("STDOUT:");
+  console.error(err.stdout.toString());
+}
     fs.rmSync(tmpDir, { recursive: true, force: true });
     res.status(500).json({ success: false, error: err.message });
   }
