@@ -1,0 +1,15 @@
+json{
+  "name": "byiv-mixer",
+  "version": "1.0.0",
+  "description": "BYIV Audio Mixer",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "axios": "^1.6.0",
+    "fluent-ffmpeg": "^2.1.2",
+    "tmp": "^0.2.1"
+  }
+}
