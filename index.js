@@ -82,7 +82,7 @@ app.post('/mix', async (req, res) => {
     console.log("voice_url =", voice_url);
     console.log("body =", req.body);
 
-    const tmpDir = `/tmp/${respondent_id}`;
+  
 
   const tmpDir = `/tmp/${respondent_id}`;
   fs.mkdirSync(tmpDir, { recursive: true });
