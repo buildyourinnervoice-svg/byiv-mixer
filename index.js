@@ -76,7 +76,13 @@ function uploadToBunny(localPath, remotePath) {
 }
 
 app.post('/mix', async (req, res) => {
-  const { voice_url, background, volume, duration, respondent_id } = req.body;
+    const { voice_url, background, volume, duration, respondent_id } = req.body;
+
+    console.log("background =", background);
+    console.log("voice_url =", voice_url);
+    console.log("body =", req.body);
+
+    const tmpDir = `/tmp/${respondent_id}`;
 
   const tmpDir = `/tmp/${respondent_id}`;
   fs.mkdirSync(tmpDir, { recursive: true });
