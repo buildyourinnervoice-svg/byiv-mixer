@@ -1,4 +1,4 @@
-javascript
+
 const express = require('express');
 const { execSync } = require('child_process');
 const fs = require('fs');
