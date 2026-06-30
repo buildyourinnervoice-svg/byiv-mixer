@@ -92,7 +92,8 @@ app.post('/mix', async (req, res) => {
   try {
     await downloadFile(voice_url, voicePath);
 
-    const bgFilename = BACKGROUND_MAP[background];
+    const cleanBackground = Object.keys(BACKGROUND_MAP).find(key => background.includes(key));
+const bgFilename = BACKGROUND_MAP[cleanBackground];
     console.log("bgFilename =", bgFilename);
     const bgUrl = `${CDN_BASE}/backgrounds/${bgFilename}`;
     console.log("bgUrl =", bgUrl);
