@@ -1,4 +1,3 @@
-
 const express = require('express');
 const { execSync } = require('child_process');
 const fs = require('fs');
@@ -67,78 +66,4 @@ function uploadToBunny(localPath, remotePath) {
     };
     const req = https.request(options, res => {
       if (res.statusCode === 201) resolve();
-      else reject(new Error(`Bunny upload failed: ${res.statusCode}`));
-    });
-    req.on('error', reject);
-    req.write(fileData);
-    req.end();
-  });
-}
-
-app.post('/mix', async (req, res) => {
-    const { voice_url, volume, duration, respondent_id } = req.body;
-    const background = Array.isArray(req.body.background) ? String(req.body.background[0]).trim() : String(req.body.background).trim();
-    console.log("background =", background);
-    console.log("voice_url =", voice_url);
-    console.log("body =", req.body);
-
-  
-
-  const tmpDir = `/tmp/${respondent_id}`;
-  fs.mkdirSync(tmpDir, { recursive: true });
-
-  const voicePath = path.join(tmpDir, 'voice.mp3');
-  const bgPath = path.join(tmpDir, 'background.mp3');
-  const outputPath = path.join(tmpDir, 'mixed.mp3');
-
-  try {
-    // Download voice file from Bunny
-    await downloadFile(voice_url, voicePath);
-
-    // Download background track from Bunny
-    const bgFilename = BACKGROUND_MAP[background];
-    const bgUrl = `${CDN_BASE}/backgrounds/${bgFilename}`;
-    await downloadFile(bgUrl, bgPath);
-
-    const durationSecs = DURATION_SECONDS[duration];
-    const voiceVolume = VOLUME_MAP[volume];
-
-    // Mix with FFmpeg: loop background, apply voice volume, trim to duration
-    execSync(
-      `ffmpeg -stream_loop -1 -i "${bgPath}" -i "${voicePath}" ` +
-      `-filter_complex "[1:a]volume=${voiceVolume}[voice];[0:a][voice]amix=inputs=2:duration=first[out]" ` +
-      `-map "[out]" -t ${durationSecs} -c:a libmp3lame -q:a 2 "${outputPath}" -y`
-    );
-
-    // Upload mixed file to Bunny
-    const remoteFilename = `mixed/${respondent_id}-mixed.mp3`;
-    await uploadToBunny(outputPath, remoteFilename);
-
-    const downloadUrl = `${CDN_BASE}/${remoteFilename}`;
-
-    // Cleanup
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-
-    res.json({ success: true, download_url: downloadUrl });
-
-  } catch (err) {
-    console.error("MESSAGE:", err.message);
-console.error("MESSAGE:", err.message);
-
-if (err.stderr) {
-  console.error("STDERR:");
-  console.error(err.stderr.toString());
-}
-
-if (err.stdout) {
-  console.error("STDOUT:");
-  console.error(err.stdout.toString());
-}
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-app.get('/health', (req, res) => res.json({ status: 'ok' }));
-
-app.listen(3000, () => console.log('BYIV Mixer running on port 3000'));
+      else reject(new Error(`Bunny upload failed: ${res.statusCode}`
