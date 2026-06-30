@@ -3,7 +3,6 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
-
 const app = express();
 app.use(express.json());
 
@@ -16,17 +15,6 @@ const VOLUME_MAP = {
   'None (Subliminal only)': '-25dB',
   'A little (Whispered)': '-12dB',
   'Fully (Clear voice)': '0dB'
-};
-
-const BACKGROUND_MAP = {
-  'Gentle Rain': 'gentle-rain.mp3',
-  'White Noise': 'white-noise.mp3',
-  'Ambient Meditation': 'ambient-meditation.mp3',
-  'Binaural Beats': 'binaural-beats.mp3',
-  'Ocean Waves': 'ocean-waves.mp3',
-  'Forest Sounds': 'forest-sounds.mp3',
-  'Thunderstorm': 'thunderstorm.mp3',
-  'Stream & Brook': 'stream-brook.mp3'
 };
 
 const DURATION_SECONDS = {
@@ -76,11 +64,12 @@ function uploadToBunny(localPath, remotePath) {
 
 app.post('/mix', async (req, res) => {
   const { voice_url, volume, duration, respondent_id } = req.body;
-  const background = Array.isArray(req.body.background) ? String(req.body.background[0]).trim() : String(req.body.background).trim();
+  const background = Array.isArray(req.body.background)
+    ? String(req.body.background[0]).trim()
+    : String(req.body.background).trim();
 
   console.log("background =", background);
   console.log("voice_url =", voice_url);
-  console.log("body =", req.body);
 
   const tmpDir = `/tmp/${respondent_id}`;
   fs.mkdirSync(tmpDir, { recursive: true });
@@ -93,7 +82,7 @@ app.post('/mix', async (req, res) => {
     await downloadFile(voice_url, voicePath);
 
     const bgUrl = background;
-console.log("bgUrl =", bgUrl);
+    console.log("bgUrl =", bgUrl);
     await downloadFile(bgUrl, bgPath);
 
     const durationSecs = DURATION_SECONDS[duration];
@@ -107,11 +96,10 @@ console.log("bgUrl =", bgUrl);
 
     const remoteFilename = `mixed/${respondent_id}-mixed.mp3`;
     await uploadToBunny(outputPath, remoteFilename);
-
     const downloadUrl = `${CDN_BASE}/${remoteFilename}`;
+
     fs.rmSync(tmpDir, { recursive: true, force: true });
     res.json({ success: true, download_url: downloadUrl });
-
   } catch (err) {
     console.error("ERROR:", err.message);
     fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -120,5 +108,4 @@ console.log("bgUrl =", bgUrl);
 });
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
-
 app.listen(3000, () => console.log('BYIV Mixer running on port 3000'));
