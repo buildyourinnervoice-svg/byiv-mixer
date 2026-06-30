@@ -76,10 +76,8 @@ function uploadToBunny(localPath, remotePath) {
 }
 
 app.post('/mix', async (req, res) => {
-   
-const background = Array.isArray(req.body.background) ? String(req.body.background[0]).trim() : String(req.body.background).trim();
-const background = Array.isArray(req.body.background) ? req.body.background[0] : req.body.background;
-
+    const { voice_url, volume, duration, respondent_id } = req.body;
+    const background = Array.isArray(req.body.background) ? String(req.body.background[0]).trim() : String(req.body.background).trim();
     console.log("background =", background);
     console.log("voice_url =", voice_url);
     console.log("body =", req.body);
