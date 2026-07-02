@@ -67,4 +67,31 @@ app.post('/mix', async (req, res) => {
   fs.mkdirSync(tmpDir, { recursive: true });
   const voicePath = path.join(tmpDir, 'voice.mp3');
   const bgPath = path.join(tmpDir, 'background.mp3');
-  const outputPath =
+  const outputPath = path.join(tmpDir, 'mixed.mp3');
+  try {
+    await downloadFile(voice_url, voicePath);
+    const bgUrl = background;
+    console.log("bgUrl =", bgUrl);
+    await downloadFile(bgUrl, bgPath);
+    const durationSecs = DURATION_SECONDS[duration];
+    const voiceVolume = VOLUME_MAP[volume];
+    execSync(
+      `ffmpeg -stream_loop -1 -i "${bgPath}" -i "${voicePath}" ` +
+      `-filter_complex "[1:a]apad=pad_dur=2,volume=${voiceVolume}[padded];` +
+      `[padded]aloop=loop=-1:size=2147483647[voiceloop];` +
+      `[0:a][voiceloop]amix=inputs=2:duration=first[out]" ` +
+      `-map "[out]" -t ${durationSecs} -c:a libmp3lame -q:a 2 "${outputPath}" -y`
+    );
+    const remoteFilename = `mixed/${respondent_id}-${Date.now()}-mixed.mp3`;
+    await uploadToBunny(outputPath, remoteFilename);
+    const downloadUrl = `${CDN_BASE}/${remoteFilename}`;
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    res.json({ success: true, download_url: downloadUrl });
+  } catch (err) {
+    console.error("ERROR:", err.message);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+app.get('/health', (req, res) => res.json({ status: 'ok' }));
+app.listen(3000, () => console.log('BYIV Mixer running on port 3000'));
