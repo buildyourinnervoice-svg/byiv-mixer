@@ -88,11 +88,13 @@ app.post('/mix', async (req, res) => {
     const durationSecs = DURATION_SECONDS[duration];
     const voiceVolume = VOLUME_MAP[volume];
 
-    execSync(
-      `ffmpeg -stream_loop -1 -i "${bgPath}" -i "${voicePath}" ` +
-      `-filter_complex "[1:a]volume=${voiceVolume}[voice];[0:a][voice]amix=inputs=2:duration=first[out]" ` +
-      `-map "[out]" -t ${durationSecs} -c:a libmp3lame -q:a 2 "${outputPath}" -y`
-    );
+  execSync(
+  `ffmpeg -stream_loop -1 -i "${bgPath}" -i "${voicePath}" ` +
+  `-filter_complex "[1:a]apad=pad_dur=2,volume=${voiceVolume}[padded];` +
+  `[padded]aloop=loop=-1:size=2147483647[voiceloop];` +
+  `[0:a][voiceloop]amix=inputs=2:duration=first[out]" ` +
+  `-map "[out]" -t ${durationSecs} -c:a libmp3lame -q:a 2 "${outputPath}" -y`
+);
 
     const remoteFilename = `mixed/${respondent_id}-mixed.mp3`;
     await uploadToBunny(outputPath, remoteFilename);
