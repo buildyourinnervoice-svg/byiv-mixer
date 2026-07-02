@@ -10,8 +10,8 @@ const BUNNY_STORAGE_ZONE = 'build-your-inner-voice';
 const BUNNY_API_KEY = process.env.BUNNY_API_KEY;
 const CDN_BASE = 'https://cdn.buildyourinnervoice.com';
 const VOLUME_MAP = {
-  'None (Subliminal only)': '-25dB',
-  'A little (Whispered)': '-12dB',
+  'None (Subliminal only)': '-35dB',
+  'A little (Whispered)': '-22dB',
   'Fully (Clear voice)': '0dB'
 };
 const DURATION_SECONDS = {
