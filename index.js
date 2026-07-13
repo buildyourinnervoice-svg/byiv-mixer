@@ -12,7 +12,7 @@ const BUNNY_API_KEY = process.env.BUNNY_API_KEY;
 const CDN_BASE = 'https://cdn.buildyourinnervoice.com';
 
 const VOLUME_MAP = {
-  'None (Subliminal only)': '-35dB',
+  'None (Subliminal only)': '-45dB',
   'A little (Whispered)': '-22dB',
   'Fully (Clear voice)': '0dB'
 };
