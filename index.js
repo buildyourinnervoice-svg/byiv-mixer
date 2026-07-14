@@ -141,7 +141,15 @@ app.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (re
   res.json({ received: true });
 });
 
-// JSON parsing for every OTHER route.
+// JSON parsing for every OTHER route. 
+// Allow the website (a different domain) to call these endpoints from the browser.
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
 app.use(express.json());
 
 const BUNNY_STORAGE_URL = 'uk.storage.bunnycdn.com';
