@@ -5,6 +5,15 @@ const path = require('path');
 const https = require('https');
 const app = express();
 
+// Allow your website (any address) to call the checkout endpoint from the browser.
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
+
 // ---------------------------------------------------------------------------
 // Stripe setup (guarded so the mixer keeps running even before keys are added).
 // Add these on Railway as environment variables:
