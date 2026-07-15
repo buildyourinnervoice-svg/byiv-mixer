@@ -125,6 +125,7 @@ app.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (re
   if (event.type === 'checkout.session.completed') {
     const s = event.data.object;
     const md = s.metadata || {};
+    if (s.mode !== 'payment' || !md.duration) { console.log('Ignoring non-order session:', s.id); return res.json({ received: true }); }
     const email = (s.customer_details && s.customer_details.email) || s.customer_email || '';
     // Same Tally-shaped payload the free path uses, so the Make pipeline needs
     // ZERO field rewiring — it reads 2.fields.`...` and 2.fieldsById.question_...
