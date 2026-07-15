@@ -71,8 +71,7 @@ function computePrice(o) {
   const gift = isGift(o);
   if (!member) return base;                        // non-member: base
   if (gift) return round2(base * 0.7);             // member gift: 30% off
-  if (o.duration === '4 hours') return round2(base * 0.7); // member 4hr: 30% off
-  return 0;                                         // member own <=60min: free
+return 0; // member own track (any length incl. 4hr): free — fair use applies
 }
 function round2(n) { return Math.round(n * 100) / 100; }
 
