@@ -318,7 +318,7 @@ app.post('/create-checkout', async (req, res) => {
 });
 
 app.post('/mix', async (req, res) => {
-  const { voice_url, volume, duration, respondent_id } = req.body;
+  const { voice_url, volume, duration, respondent_id, callback_url } = req.body;
   const background = Array.isArray(req.body.background)
     ? String(req.body.background[0]).trim()
     : String(req.body.background || '').trim();
@@ -338,40 +338,81 @@ app.post('/mix', async (req, res) => {
   console.log('background =', background);
   console.log('voice_url =', voice_url);
 
-  const tmpDir = `/tmp/${respondent_id}`;
-  fs.mkdirSync(tmpDir, { recursive: true });
-  const voicePath = path.join(tmpDir, 'voice.mp3');
-  const bgPath = path.join(tmpDir, 'background.mp3');
-  const outputPath = path.join(tmpDir, 'mixed.mp3');
+  // ---- ASYNC MIXING (added 17 Jul 2026) ----------------------------------
+  // Long tracks (4 hours) take far longer than Make's 5-minute HTTP ceiling,
+  // so we fix the output filename NOW, reply immediately, render in the
+  // background, and tell Make via callback_url when the track is ready.
+  const remoteFilename = `mixed/${respondent_id}-${Date.now()}-mixed.mp3`;
+  const downloadUrl = `${CDN_BASE}/${remoteFilename}`;
 
-  try {
-    await downloadFile(voice_url, voicePath);
-    await downloadFile(background, bgPath);
+  // Fields echoed back to the Make "Track Ready" webhook.
+  const passthrough = {
+    respondent_id,
+    email: req.body.email || '',
+    focus: req.body.focus || '',
+    duration_label: req.body.duration_label || duration || '',
+    affirmations: req.body.affirmations || '',
+    risk: req.body.risk || ''
+  };
+  if (req.body.gift_date) passthrough.gift_date = req.body.gift_date; // omit when empty: delivery filter relies on absence
 
-    await runFfmpeg([
-      '-stream_loop', '-1', '-i', bgPath,
-      '-i', voicePath,
-      '-filter_complex',
-      `[1:a]apad=pad_dur=2,volume=${voiceVolume}[padded];` +
-      `[padded]aloop=loop=-1:size=2147483647[voiceloop];` +
-      `[0:a][voiceloop]amix=inputs=2:duration=first[out]`,
-      '-map', '[out]',
-      '-t', String(durationSecs),
-      '-c:a', 'libmp3lame', '-q:a', '2',
-      outputPath, '-y'
-    ]);
-
-    const remoteFilename = `mixed/${respondent_id}-${Date.now()}-mixed.mp3`;
-    await uploadToBunny(outputPath, remoteFilename);
-    const downloadUrl = `${CDN_BASE}/${remoteFilename}`;
-
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-    res.json({ success: true, download_url: downloadUrl });
-  } catch (err) {
-    console.error('ERROR:', err.message);
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-    res.status(500).json({ success: false, error: err.message });
+  function postCallback(payload) {
+    if (!callback_url) return Promise.resolve();
+    return new Promise((resolve) => {
+      try {
+        const body = JSON.stringify(payload);
+        const u = new URL(callback_url);
+        const reqOpts = {
+          hostname: u.hostname,
+          path: u.pathname + u.search,
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+        };
+        const cbReq = https.request(reqOpts, (cbRes) => { cbRes.resume(); cbRes.on('end', resolve); });
+        cbReq.on('error', (e) => { console.error('Callback failed:', e.message); resolve(); });
+        cbReq.write(body);
+        cbReq.end();
+      } catch (e) { console.error('Callback error:', e.message); resolve(); }
+    });
   }
+
+  // Reply straight away so Make never times out.
+  res.json({ success: true, status: 'processing', download_url: downloadUrl });
+
+  // Render + upload in the background.
+  (async () => {
+    const tmpDir = `/tmp/${respondent_id}-${Date.now()}`;
+    fs.mkdirSync(tmpDir, { recursive: true });
+    const voicePath = path.join(tmpDir, 'voice.mp3');
+    const bgPath = path.join(tmpDir, 'background.mp3');
+    const outputPath = path.join(tmpDir, 'mixed.mp3');
+    try {
+      await downloadFile(voice_url, voicePath);
+      await downloadFile(background, bgPath);
+
+      await runFfmpeg([
+        '-stream_loop', '-1', '-i', bgPath,
+        '-i', voicePath,
+        '-filter_complex',
+        `[1:a]apad=pad_dur=2,volume=${voiceVolume}[padded];` +
+        `[padded]aloop=loop=-1:size=2147483647[voiceloop];` +
+        `[0:a][voiceloop]amix=inputs=2:duration=first[out]`,
+        '-map', '[out]',
+        '-t', String(durationSecs),
+        '-c:a', 'libmp3lame', '-q:a', '2',
+        outputPath, '-y'
+      ]);
+
+      await uploadToBunny(outputPath, remoteFilename);
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      console.log('Mix complete:', remoteFilename);
+      await postCallback({ status: 'success', download_url: downloadUrl, ...passthrough });
+    } catch (err) {
+      console.error('MIX ERROR:', err.message);
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      await postCallback({ status: 'failed', error: err.message, ...passthrough });
+    }
+  })();
 });
 
 app.get('/health', (req, res) => res.json({ status: 'ok', stripe: !!stripe }));
