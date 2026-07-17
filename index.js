@@ -310,7 +310,7 @@ app.post('/create-checkout', async (req, res) => {
       if (!pEmail) return res.status(400).json({ error: 'Please add your email so we can send your free track.' });
       const uses = await promoUses();
       const already = uses.some(u => String(u.email || '').toLowerCase() === pEmail.toLowerCase());
-      if (!already && uses.length >= 10) return res.status(403).json({ error: 'This code has now been fully redeemed.' });
+      if (!already && uses.length >= 12) return res.status(403).json({ error: 'This code has now been fully redeemed.' });
       if (!already) { uses.push({ email: pEmail, at: new Date().toISOString() }); await savePromoUses(uses); }
       finalPrice = 0;
     }
