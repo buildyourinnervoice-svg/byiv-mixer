@@ -157,13 +157,23 @@ const BUNNY_STORAGE_ZONE = 'build-your-inner-voice';
 const BUNNY_API_KEY = process.env.BUNNY_API_KEY;
 const CDN_BASE = 'https://cdn.buildyourinnervoice.com';
 
-// Per-mode mix levels (tuned 18 Jul 2026 after listening tests):
-//   Subliminal: voice buried at -35dB under full background (confirmed inaudible, no squeak).
-//   Whispered: -22dB proved inaudible in tests, raised to -16dB; background eased slightly.
+// Per-mode mix levels (re-tuned 18 Jul 2026 PM, measurement-based):
+//   Subliminal: -35dB proved AUDIBLE under Ocean Waves — its quiet troughs drop
+//     to -59dB RMS while the voice's speech peaks at -35dB attenuation sat at
+//     -48dB, i.e. LOUDER than the background between swells. At -60dB the voice
+//     peaks at ~-75dB absolute: below the quietest trough with >14dB margin,
+//     inaudible at any playback volume, yet verified to survive the 192k MP3
+//     encode (0.97 correlation with the original voice signal). -60dB is the
+//     level for the QUIETEST background offered; louder beds mask even better.
+//   Whispered (owner pref 18 Jul PM): -35dB — the level that was too LOUD to be
+//     subliminal is exactly right for "a little / whispered": the voice sits
+//     around the background's median and pokes just above its quiet troughs, so
+//     it's faintly there if you listen without ever dominating. Background eased
+//     slightly (-4dB) so the whisper stays perceptible.
 //   Full voice: the voice should LEAD, so the background steps back to a light bed.
 const MIX_LEVELS = {
-  'None (Subliminal only)': { voice: '-35dB', bg: '0dB' },
-  'A little (Whispered)':   { voice: '-16dB', bg: '-4dB' },
+  'None (Subliminal only)': { voice: '-60dB', bg: '0dB' },
+  'A little (Whispered)':   { voice: '-35dB', bg: '-4dB' },
   'Fully (Clear voice)':    { voice: '0dB',   bg: '-12dB' }
 };
 const DURATION_SECONDS = {
@@ -523,14 +533,17 @@ app.post('/mix', async (req, res) => {
 // Optional &secs=90 (default 60, max 300).
 // Optional &voice=<mp3 URL> layers an EXISTING voice recording under the sound
 // exactly like a real mix (reuses voice files already on Bunny — no ElevenLabs
-// spend). Optional &voicevol=-35dB | -22dB | 0dB (default -35dB, subliminal).
+// spend). Optional &voicevol=0dB down to -99dB (default -60dB, subliminal).
+// NOTE (18 Jul fix): the old validation regex only accepted 0..-39dB and
+// SILENTLY fell back to the default for anything lower — which is why -45dB
+// and -50dB tests sounded identical. Now accepts the full 0..-99dB range.
 // ---------------------------------------------------------------------------
 app.get('/preview', async (req, res) => {
   try {
     const sound = String(req.query.sound || '').trim();
     const voice = String(req.query.voice || '').trim();
-    const dbOk = (v) => /^(0|-[1-9]|-[1-3][0-9])dB$/.test(String(v || ''));
-    const voicevol = dbOk(req.query.voicevol) ? req.query.voicevol : '-35dB';
+    const dbOk = (v) => /^(0|-[1-9][0-9]?)dB$/.test(String(v || ''));
+    const voicevol = dbOk(req.query.voicevol) ? req.query.voicevol : '-60dB';
     const bgvol = dbOk(req.query.bgvol) ? req.query.bgvol : '0dB';
     const secs = Math.min(parseInt(req.query.secs, 10) || 60, 300);
     if (!sound) return res.status(400).send('Add ?sound=white, ?sound=pink, or ?sound=<mp3 url>');
