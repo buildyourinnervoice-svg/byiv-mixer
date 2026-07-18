@@ -546,9 +546,14 @@ app.get('/preview', async (req, res) => {
     const bgLabel = colour ? '[0:a]pan=stereo|c0=c0|c1=c0[bg];' : '[0:a]anull[bg];';
     let filter, extraInputs = [];
     if (voice) {
-      if (!/^https:\/\//i.test(voice)) return res.status(400).send('voice must be an https mp3 URL');
+      // voice can be a full https URL, or just an order/submission id — in
+      // which case we build the CDN voice-file URL ourselves (this avoids
+      // nested URLs in the query string, which some browsers/tools strip).
+      const voiceUrl = /^https:\/\//i.test(voice)
+        ? voice
+        : `${CDN_BASE}/${voice.replace(/\.mp3$/i, '')}.mp3`;
       const vTmp = `/tmp/preview-voice-${Date.now()}.mp3`;
-      await downloadFile(voice, vTmp);
+      await downloadFile(voiceUrl, vTmp);
       tmpFiles.push(vTmp);
       extraInputs = ['-i', vTmp];
       filter = bgLabel +
