@@ -200,7 +200,7 @@ const CDN_BASE = 'https://cdn.buildyourinnervoice.com';
 //   Full voice: the voice should LEAD, so the background steps back to a light bed.
 const MIX_LEVELS = {
   'None (Subliminal only)': { voice: '-60dB', bg: '0dB' },
-          'A little (Whispered)':   { voice: '-12dB', bg: '-32dB' },
+            'A little (Whispered)':   { voice: '-18dB', bg: '-38dB' },
   'Fully (Clear voice)':    { voice: '0dB',   bg: '-12dB' }
 };
 const DURATION_SECONDS = {
