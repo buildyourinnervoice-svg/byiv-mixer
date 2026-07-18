@@ -131,11 +131,39 @@ app.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (re
     const payload = buildPipelinePayload(md, email, s.id);
     payload.amount_paid = (s.amount_total || 0) / 100;
     console.log('Payment complete, forwarding order:', payload.submissionId, email);
+    let forwarded = false;
     try {
-      if (MAKE_WEBHOOK_URL) await postJson(MAKE_WEBHOOK_URL, payload);
+      if (MAKE_WEBHOOK_URL) { await postJson(MAKE_WEBHOOK_URL, payload); forwarded = true; }
       else console.error('MAKE_WEBHOOK_URL not set — order not forwarded.');
     } catch (err) {
       console.error('Forward to Make failed:', err.message);
+    }
+
+    // ---- GDPR AUTO-SCRUB (added 18 Jul 2026) --------------------------------
+    // Once the order is safely handed to Make, wipe the free-text the customer
+    // shared (and any gift recipient's details) from Stripe's stored metadata,
+    // so no copy of it lingers in the payment record beyond processing. Stripe
+    // then keeps only the basic purchase record (amount, date, buyer email,
+    // and non-sensitive choices like focus/duration) for the 6-year UK tax
+    // window. This makes the website's "personal details deleted within 30 days"
+    // promise automatically true for paid orders — no manual clean-up needed.
+    // We only scrub AFTER a successful forward, so a failed order keeps its data
+    // for recovery. Stripe merges these keys, leaving the other metadata intact.
+    if (forwarded && stripe) {
+      try {
+        await stripe.checkout.sessions.update(s.id, {
+          metadata: {
+            details: '',
+            gift_message: '',
+            recipient_name: '',
+            recipient_email: '',
+            gdpr_scrubbed: new Date().toISOString().slice(0, 10)
+          }
+        });
+        console.log('GDPR: scrubbed free-text from Stripe metadata for', s.id);
+      } catch (err) {
+        console.error('Stripe metadata scrub failed (non-fatal):', err.message);
+      }
     }
   }
   res.json({ received: true });
