@@ -193,15 +193,14 @@ const CDN_BASE = 'https://cdn.buildyourinnervoice.com';
 //     inaudible at any playback volume, yet verified to survive the 192k MP3
 //     encode (0.97 correlation with the original voice signal). -60dB is the
 //     level for the QUIETEST background offered; louder beds mask even better.
-//   Whispered (owner pref 18 Jul PM): -35dB — the level that was too LOUD to be
-//     subliminal is exactly right for "a little / whispered": the voice sits
-//     around the background's median and pokes just above its quiet troughs, so
-//     it's faintly there if you listen without ever dominating. Background eased
-//     slightly (-4dB) so the whisper stays perceptible.
+  //   Whispered (updated 18 Jul 2026 PM after customer listening test): -35dB
+  //     measured as audible but real customers still couldn't make out the words
+  //     ("far away"/indistinct). Pushed to -20dB voice / -8dB bg so the words are
+  //     clearly intelligible, not just technically present above the noise floor.
 //   Full voice: the voice should LEAD, so the background steps back to a light bed.
 const MIX_LEVELS = {
   'None (Subliminal only)': { voice: '-60dB', bg: '0dB' },
-  'A little (Whispered)':   { voice: '-35dB', bg: '-4dB' },
+      'A little (Whispered)':   { voice: '-20dB', bg: '-8dB' },
   'Fully (Clear voice)':    { voice: '0dB',   bg: '-12dB' }
 };
 const DURATION_SECONDS = {
