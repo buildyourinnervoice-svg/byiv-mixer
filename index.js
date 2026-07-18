@@ -157,10 +157,14 @@ const BUNNY_STORAGE_ZONE = 'build-your-inner-voice';
 const BUNNY_API_KEY = process.env.BUNNY_API_KEY;
 const CDN_BASE = 'https://cdn.buildyourinnervoice.com';
 
-const VOLUME_MAP = {
-  'None (Subliminal only)': '-35dB',
-  'A little (Whispered)': '-22dB',
-  'Fully (Clear voice)': '0dB'
+// Per-mode mix levels (tuned 18 Jul 2026 after listening tests):
+//   Subliminal: voice buried at -35dB under full background (confirmed inaudible, no squeak).
+//   Whispered: -22dB proved inaudible in tests, raised to -16dB; background eased slightly.
+//   Full voice: the voice should LEAD, so the background steps back to a light bed.
+const MIX_LEVELS = {
+  'None (Subliminal only)': { voice: '-35dB', bg: '0dB' },
+  'A little (Whispered)':   { voice: '-16dB', bg: '-4dB' },
+  'Fully (Clear voice)':    { voice: '0dB',   bg: '-12dB' }
 };
 const DURATION_SECONDS = {
   '5 minutes': 300,
@@ -377,7 +381,8 @@ app.post('/mix', async (req, res) => {
     : String(req.body.background || '').trim();
 
   const durationSecs = DURATION_SECONDS[duration];
-  const voiceVolume = VOLUME_MAP[volume];
+  const levels = MIX_LEVELS[volume];
+  const voiceVolume = levels && levels.voice;
   if (!voice_url || !background || !respondent_id) {
     return res.status(400).json({ success: false, error: 'Missing voice_url, background, or respondent_id' });
   }
@@ -461,7 +466,8 @@ app.post('/mix', async (req, res) => {
                         : /white-noise/i.test(background) ? 'white' : null;
 
       const filterChain =
-        `[1:a]apad=pad_dur=2,volume=${voiceVolume}[padded];` +
+        `[bg0]volume=${levels.bg}[bg];` +
+        `[1:a]apad=pad_dur=2,volume=${levels.voice}[padded];` +
         `[padded]aloop=loop=-1:size=2147483647[voiceloop];` +
         `[bg][voiceloop]amix=inputs=2:duration=first:normalize=0[mix];` +
         `[mix]alimiter=limit=0.95[out]`;
@@ -473,7 +479,7 @@ app.post('/mix', async (req, res) => {
           '-i', `anoisesrc=colour=${noiseColour}:sample_rate=44100:amplitude=0.35:seed=1,aformat=channel_layouts=mono`,
           '-i', voicePath,
           '-filter_complex',
-          `[0:a]pan=stereo|c0=c0|c1=c0[bg];` + filterChain,
+          `[0:a]pan=stereo|c0=c0|c1=c0[bg0];` + filterChain,
           '-map', '[out]',
           '-t', String(durationSecs),
           '-c:a', 'libmp3lame', '-b:a', '192k',
@@ -485,7 +491,7 @@ app.post('/mix', async (req, res) => {
           '-stream_loop', '-1', '-i', bgPath,
           '-i', voicePath,
           '-filter_complex',
-          `[0:a]anull[bg];` + filterChain,
+          `[0:a]anull[bg0];` + filterChain,
           '-map', '[out]',
           '-t', String(durationSecs),
           '-c:a', 'libmp3lame', '-b:a', '192k',
@@ -523,7 +529,9 @@ app.get('/preview', async (req, res) => {
   try {
     const sound = String(req.query.sound || '').trim();
     const voice = String(req.query.voice || '').trim();
-    const voicevol = /^(-35dB|-22dB|0dB)$/.test(String(req.query.voicevol || '')) ? req.query.voicevol : '-35dB';
+    const dbOk = (v) => /^(0|-[1-9]|-[1-3][0-9])dB$/.test(String(v || ''));
+    const voicevol = dbOk(req.query.voicevol) ? req.query.voicevol : '-35dB';
+    const bgvol = dbOk(req.query.bgvol) ? req.query.bgvol : '0dB';
     const secs = Math.min(parseInt(req.query.secs, 10) || 60, 300);
     if (!sound) return res.status(400).send('Add ?sound=white, ?sound=pink, or ?sound=<mp3 url>');
 
@@ -543,7 +551,7 @@ app.get('/preview', async (req, res) => {
       inputArgs = ['-stream_loop', '-1', '-i', bgTmp];
     }
 
-    const bgLabel = colour ? '[0:a]pan=stereo|c0=c0|c1=c0[bg];' : '[0:a]anull[bg];';
+    const bgLabel = (colour ? '[0:a]pan=stereo|c0=c0|c1=c0[bg0];' : '[0:a]anull[bg0];') + `[bg0]volume=${bgvol}[bg];`;
     let filter, extraInputs = [];
     if (voice) {
       // voice can be a full https URL, or just an order/submission id — in
