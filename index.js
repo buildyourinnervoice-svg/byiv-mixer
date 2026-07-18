@@ -454,7 +454,11 @@ app.post('/mix', async (req, res) => {
       // 3. Output bitrate raised to constant 192k: low/variable bitrate on
       //    noise-heavy audio is what mangles the buried affirmation voice
       //    into audible "squeaks". Constant 192k keeps it smooth and masked.
-      const isWhiteNoise = /white-noise/i.test(background);
+      //    Pink noise (softer, warmer than white) is supported the same way:
+      //    any background URL containing "pink-noise" generates pink noise —
+      //    the URL doesn't need to point at a real file.
+      const noiseColour = /pink-noise/i.test(background) ? 'pink'
+                        : /white-noise/i.test(background) ? 'white' : null;
 
       const filterChain =
         `[1:a]apad=pad_dur=2,volume=${voiceVolume}[padded];` +
@@ -463,11 +467,10 @@ app.post('/mix', async (req, res) => {
         `[mix]alimiter=limit=0.95[out]`;
 
       let ffArgs;
-      if (isWhiteNoise) {
-        // Two independent noise generators joined as stereo = natural, wide noise.
+      if (noiseColour) {
         ffArgs = [
           '-f', 'lavfi',
-          '-i', 'anoisesrc=colour=white:sample_rate=44100:amplitude=0.35:seed=1,aformat=channel_layouts=mono',
+          '-i', `anoisesrc=colour=${noiseColour}:sample_rate=44100:amplitude=0.35:seed=1,aformat=channel_layouts=mono`,
           '-i', voicePath,
           '-filter_complex',
           `[0:a]pan=stereo|c0=c0|c1=c0[bg];` + filterChain,
@@ -502,6 +505,56 @@ app.post('/mix', async (req, res) => {
       await postCallback({ status: 'failed', error: err.message, ...passthrough });
     }
   })();
+});
+
+// ---------------------------------------------------------------------------
+// SOUND PREVIEW (added 18 Jul 2026) — hear any background exactly as the mixer
+// renders it, WITHOUT ordering a track (no voice, no ElevenLabs credits, no
+// Bunny upload). Open in a browser:
+//   /preview?sound=white            (generated white noise)
+//   /preview?sound=pink             (generated pink noise)
+//   /preview?sound=<full mp3 URL>   (any background file, looped like a real mix)
+// Optional &secs=90 (default 60, max 300).
+// ---------------------------------------------------------------------------
+app.get('/preview', async (req, res) => {
+  try {
+    const sound = String(req.query.sound || '').trim();
+    const secs = Math.min(parseInt(req.query.secs, 10) || 60, 300);
+    if (!sound) return res.status(400).send('Add ?sound=white, ?sound=pink, or ?sound=<mp3 url>');
+
+    const colour = /^pink$/i.test(sound) || /pink-noise/i.test(sound) ? 'pink'
+                 : /^white$/i.test(sound) || /white-noise/i.test(sound) ? 'white' : null;
+
+    let inputArgs;
+    let tmpFile = null;
+    if (colour) {
+      inputArgs = ['-f', 'lavfi', '-i',
+        `anoisesrc=colour=${colour}:sample_rate=44100:amplitude=0.35:seed=1,aformat=channel_layouts=mono`];
+    } else {
+      if (!/^https:\/\//i.test(sound)) return res.status(400).send('sound must be white, pink, or an https mp3 URL');
+      tmpFile = `/tmp/preview-${Date.now()}.mp3`;
+      await downloadFile(sound, tmpFile);
+      inputArgs = ['-stream_loop', '-1', '-i', tmpFile];
+    }
+
+    res.setHeader('Content-Type', 'audio/mpeg');
+    const args = [
+      ...inputArgs,
+      '-filter_complex',
+      (colour ? '[0:a]pan=stereo|c0=c0|c1=c0[bg];' : '[0:a]anull[bg];') + '[bg]alimiter=limit=0.95[out]',
+      '-map', '[out]',
+      '-t', String(secs),
+      '-c:a', 'libmp3lame', '-b:a', '192k',
+      '-f', 'mp3', 'pipe:1'
+    ];
+    const proc = spawn('ffmpeg', args);
+    proc.stdout.pipe(res);
+    proc.stderr.on('data', () => {});
+    proc.on('close', () => { if (tmpFile) fs.unlink(tmpFile, () => {}); });
+    req.on('close', () => proc.kill('SIGKILL'));
+  } catch (err) {
+    res.status(500).send('Preview failed: ' + err.message);
+  }
 });
 
 app.get('/health', (req, res) => res.json({ status: 'ok', stripe: !!stripe }));
