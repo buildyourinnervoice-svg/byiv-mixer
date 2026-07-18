@@ -515,10 +515,15 @@ app.post('/mix', async (req, res) => {
 //   /preview?sound=pink             (generated pink noise)
 //   /preview?sound=<full mp3 URL>   (any background file, looped like a real mix)
 // Optional &secs=90 (default 60, max 300).
+// Optional &voice=<mp3 URL> layers an EXISTING voice recording under the sound
+// exactly like a real mix (reuses voice files already on Bunny — no ElevenLabs
+// spend). Optional &voicevol=-35dB | -22dB | 0dB (default -35dB, subliminal).
 // ---------------------------------------------------------------------------
 app.get('/preview', async (req, res) => {
   try {
     const sound = String(req.query.sound || '').trim();
+    const voice = String(req.query.voice || '').trim();
+    const voicevol = /^(-35dB|-22dB|0dB)$/.test(String(req.query.voicevol || '')) ? req.query.voicevol : '-35dB';
     const secs = Math.min(parseInt(req.query.secs, 10) || 60, 300);
     if (!sound) return res.status(400).send('Add ?sound=white, ?sound=pink, or ?sound=<mp3 url>');
 
@@ -526,22 +531,40 @@ app.get('/preview', async (req, res) => {
                  : /^white$/i.test(sound) || /white-noise/i.test(sound) ? 'white' : null;
 
     let inputArgs;
-    let tmpFile = null;
+    const tmpFiles = [];
     if (colour) {
       inputArgs = ['-f', 'lavfi', '-i',
         `anoisesrc=colour=${colour}:sample_rate=44100:amplitude=0.35:seed=1,aformat=channel_layouts=mono`];
     } else {
       if (!/^https:\/\//i.test(sound)) return res.status(400).send('sound must be white, pink, or an https mp3 URL');
-      tmpFile = `/tmp/preview-${Date.now()}.mp3`;
-      await downloadFile(sound, tmpFile);
-      inputArgs = ['-stream_loop', '-1', '-i', tmpFile];
+      const bgTmp = `/tmp/preview-bg-${Date.now()}.mp3`;
+      await downloadFile(sound, bgTmp);
+      tmpFiles.push(bgTmp);
+      inputArgs = ['-stream_loop', '-1', '-i', bgTmp];
+    }
+
+    const bgLabel = colour ? '[0:a]pan=stereo|c0=c0|c1=c0[bg];' : '[0:a]anull[bg];';
+    let filter, extraInputs = [];
+    if (voice) {
+      if (!/^https:\/\//i.test(voice)) return res.status(400).send('voice must be an https mp3 URL');
+      const vTmp = `/tmp/preview-voice-${Date.now()}.mp3`;
+      await downloadFile(voice, vTmp);
+      tmpFiles.push(vTmp);
+      extraInputs = ['-i', vTmp];
+      filter = bgLabel +
+        `[1:a]apad=pad_dur=2,volume=${voicevol}[padded];` +
+        `[padded]aloop=loop=-1:size=2147483647[voiceloop];` +
+        `[bg][voiceloop]amix=inputs=2:duration=first:normalize=0[mix];` +
+        `[mix]alimiter=limit=0.95[out]`;
+    } else {
+      filter = bgLabel + '[bg]alimiter=limit=0.95[out]';
     }
 
     res.setHeader('Content-Type', 'audio/mpeg');
     const args = [
       ...inputArgs,
-      '-filter_complex',
-      (colour ? '[0:a]pan=stereo|c0=c0|c1=c0[bg];' : '[0:a]anull[bg];') + '[bg]alimiter=limit=0.95[out]',
+      ...extraInputs,
+      '-filter_complex', filter,
       '-map', '[out]',
       '-t', String(secs),
       '-c:a', 'libmp3lame', '-b:a', '192k',
@@ -550,7 +573,7 @@ app.get('/preview', async (req, res) => {
     const proc = spawn('ffmpeg', args);
     proc.stdout.pipe(res);
     proc.stderr.on('data', () => {});
-    proc.on('close', () => { if (tmpFile) fs.unlink(tmpFile, () => {}); });
+    proc.on('close', () => { tmpFiles.forEach(f => fs.unlink(f, () => {})); });
     req.on('close', () => proc.kill('SIGKILL'));
   } catch (err) {
     res.status(500).send('Preview failed: ' + err.message);
