@@ -4,7 +4,6 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const app = express();
-
 // ---------------------------------------------------------------------------
 // Stripe setup (guarded so the mixer keeps running even before keys are added).
 // Add these on Railway as environment variables:
@@ -25,10 +24,8 @@ try {
 } catch (e) {
   console.error('Stripe init failed:', e.message);
 }
-
 const MAKE_WEBHOOK_URL = process.env.MAKE_WEBHOOK_URL || '';
 const SITE_URL = process.env.SITE_URL || 'https://buildyourinnervoice.com';
-
 // Server-side price table — the ONLY source of truth for what a track costs.
 // Never trust a price sent from the browser.
 const PRICE = {
@@ -38,7 +35,6 @@ const PRICE = {
   '60 min': 16,
   '4 hours': 25
 };
-
 // The wizard says "5 min" but the pipeline/mixer expect "5 minutes".
 const DURATION_NORMALISE = {
   '5 min': '5 minutes',
@@ -47,7 +43,6 @@ const DURATION_NORMALISE = {
   '60 min': '60 minutes',
   '4 hours': '4 hours'
 };
-
 // ---- Pricing brain (members + gifts) --------------------------------------
 // Rules (mirrors the pricing we built on the old Tally form):
 //   Non-member: pay the base price above (gift or own, same price).
@@ -74,7 +69,6 @@ function computePrice(o) {
 return 0; // member own track (any length incl. 4hr): free — fair use applies
 }
 function round2(n) { return Math.round(n * 100) / 100; }
-
 // Build the Tally-shaped payload the Make pipeline expects, from an order + email.
 function buildPipelinePayload(o, email, orderId) {
   const durationFull = DURATION_NORMALISE[o.duration] || o.duration || '';
@@ -100,7 +94,6 @@ function buildPipelinePayload(o, email, orderId) {
     }
   };
 }
-
 // ---------------------------------------------------------------------------
 // STRIPE WEBHOOK — must be registered BEFORE express.json(), because Stripe
 // signature verification needs the raw, unparsed request body.
@@ -120,7 +113,6 @@ app.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (re
     console.error('Webhook signature failed:', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
-
   if (event.type === 'checkout.session.completed') {
     const s = event.data.object;
     const md = s.metadata || {};
@@ -138,7 +130,6 @@ app.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (re
     } catch (err) {
       console.error('Forward to Make failed:', err.message);
     }
-
     // ---- GDPR AUTO-SCRUB (added 18 Jul 2026) --------------------------------
     // Once the order is safely handed to Make, wipe the free-text the customer
     // shared (and any gift recipient's details) from Stripe's stored metadata,
@@ -168,7 +159,6 @@ app.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (re
   }
   res.json({ received: true });
 });
-
 // JSON parsing for every OTHER route.
 // Allow the website (a different domain) to call these endpoints from the browser.
 app.use((req, res, next) => {
@@ -179,29 +169,29 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.json());
-
 const BUNNY_STORAGE_URL = 'uk.storage.bunnycdn.com';
 const BUNNY_STORAGE_ZONE = 'build-your-inner-voice';
 const BUNNY_API_KEY = process.env.BUNNY_API_KEY;
 const CDN_BASE = 'https://cdn.buildyourinnervoice.com';
-
-// Per-mode mix levels (re-tuned 18 Jul 2026 PM, measurement-based):
-//   Subliminal: -35dB proved AUDIBLE under Ocean Waves — its quiet troughs drop
-//     to -59dB RMS while the voice's speech peaks at -35dB attenuation sat at
-//     -48dB, i.e. LOUDER than the background between swells. At -60dB the voice
-//     peaks at ~-75dB absolute: below the quietest trough with >14dB margin,
-//     inaudible at any playback volume, yet verified to survive the 192k MP3
-//     encode (0.97 correlation with the original voice signal). -60dB is the
-//     level for the QUIETEST background offered; louder beds mask even better.
-  //   Whispered (updated 18 Jul 2026 PM after customer listening test): -35dB
-  //     measured as audible but real customers still couldn't make out the words
-  //     ("far away"/indistinct). Pushed to -20dB voice / -8dB bg so the words are
-  //     clearly intelligible, not just technically present above the noise floor.
-//   Full voice: the voice should LEAD, so the background steps back to a light bed.
+// ---------------------------------------------------------------------------
+// Per-tier mix levels (reworked 18 Jul 2026 PM2 — measurement + listening based).
+// The background is FIRST auto-levelled to a common loudness (loudnorm, in the
+// filter below), so these bg values are offsets from that NORMALISED level and
+// behave consistently for EVERY background sound — including any new one added
+// later, with nothing to hand-tune. The background is also DUCKED under the
+// voice (sidechaincompress) so the words stay clear while the bed fills the
+// gaps. Ducking only triggers when the voice is loud enough, so Subliminal
+// (voice -60dB) is unaffected and the background stays full there.
+//   Subliminal: voice buried (inaudible), background full.
+//   Whispered:  words lead gently, background present but ducked under them.
+//   Full voice: voice leads clearly, background a light bed.
+// (Previously Whispered was bg -30dB, which buried every background — that was
+//  the "can't hear the rain" bug.)
+// ---------------------------------------------------------------------------
 const MIX_LEVELS = {
-  'None (Subliminal only)': { voice: '-60dB', bg: '0dB' },
-              'A little (Whispered)':   { voice: '-18dB', bg: '-30dB' },
-  'Fully (Clear voice)':    { voice: '0dB',   bg: '-12dB' }
+  'None (Subliminal only)': { voice: '-60dB', bg: '0dB'   },
+  'A little (Whispered)':   { voice: '-18dB', bg: '-9dB'  },
+  'Fully (Clear voice)':    { voice: '0dB',   bg: '-14dB' }
 };
 const DURATION_SECONDS = {
   '5 minutes': 300,
@@ -211,7 +201,6 @@ const DURATION_SECONDS = {
   '4 hours': 14400,
   '8 hours': 28800
 };
-
 // ---- small JSON POST helper (used to forward paid orders to Make) ----
 // ---- LAUNCH22 promo ledger (added 17 Jul 2026): tiny JSON file on Bunny storage ----
 const PROMO_FILE = 'promo-launch22.json';
@@ -249,7 +238,6 @@ function savePromoUses(uses) {
     r.end();
   });
 }
-
 function postJson(url, data) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify(data);
@@ -270,7 +258,6 @@ function postJson(url, data) {
     r.end();
   });
 }
-
 function downloadFile(url, dest) {
   return new Promise((resolve, reject) => {
     const file = fs.createWriteStream(dest);
@@ -288,7 +275,6 @@ function downloadFile(url, dest) {
     });
   });
 }
-
 function runFfmpeg(args) {
   return new Promise((resolve, reject) => {
     const proc = spawn('ffmpeg', args);
@@ -296,8 +282,8 @@ function runFfmpeg(args) {
     proc.stderr.on('data', d => { lastErr = d.toString().slice(-500); });
     const killTimer = setTimeout(() => {
       proc.kill('SIGKILL');
-      reject(new Error('ffmpeg timed out after 20 minutes'));
-    }, 20 * 60 * 1000);
+      reject(new Error('ffmpeg timed out after 45 minutes'));
+    }, 45 * 60 * 1000);
     proc.on('error', err => { clearTimeout(killTimer); reject(err); });
     proc.on('close', code => {
       clearTimeout(killTimer);
@@ -306,7 +292,6 @@ function runFfmpeg(args) {
     });
   });
 }
-
 function uploadToBunny(localPath, remotePath) {
   const stat = fs.statSync(localPath);
   return new Promise((resolve, reject) => {
@@ -328,7 +313,6 @@ function uploadToBunny(localPath, remotePath) {
     fs.createReadStream(localPath).pipe(req);
   });
 }
-
 // ---------------------------------------------------------------------------
 // CREATE CHECKOUT — the website wizard calls this when the customer clicks
 // "Continue to payment". We compute the price server-side, stash the order in
@@ -339,7 +323,6 @@ app.post('/create-checkout', async (req, res) => {
     const o = req.body || {};
     const price = computePrice(o);
     if (price === null) return res.status(400).json({ error: `Unknown duration: ${o.duration}` });
-
     // ---- LAUNCH22 promo (added 17 Jul 2026): one free track of any length,
     // capped at 10 unique redemptions, ledger on Bunny storage. Same email
     // re-using the code doesn't burn an extra slot.
@@ -355,7 +338,6 @@ app.post('/create-checkout', async (req, res) => {
       if (!already) { uses.push({ email: pEmail, at: new Date().toISOString() }); await savePromoUses(uses); }
       finalPrice = 0;
     }
-
     // FREE path (member own track <=60 min, or a future promo code): no Stripe.
     // We need an email here since there's no Stripe page to collect one.
     if (finalPrice === 0) {
@@ -367,9 +349,7 @@ app.post('/create-checkout', async (req, res) => {
       else console.error('MAKE_WEBHOOK_URL not set — free order not forwarded.');
       return res.json({ free: true, url: `${SITE_URL}/?paid=1` });
     }
-
     if (!stripe) return res.status(503).json({ error: 'Payments are not configured yet.' });
-
     // Stripe metadata: max 50 keys, 500 chars per value. Trim the free-text fields.
     const md = {
       focus: String(o.focus || '').slice(0, 480),
@@ -384,7 +364,6 @@ app.post('/create-checkout', async (req, res) => {
       recipient_name: String(o.recipient_name || '').slice(0, 200),
       recipient_email: String(o.recipient_email || '').slice(0, 200)
     };
-
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],
@@ -403,20 +382,17 @@ app.post('/create-checkout', async (req, res) => {
       success_url: `${SITE_URL}/?paid=1`,
       cancel_url: `${SITE_URL}/?canceled=1`
     });
-
     res.json({ url: session.url });
   } catch (err) {
     console.error('create-checkout error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
-
 app.post('/mix', async (req, res) => {
   const { voice_url, volume, duration, respondent_id, callback_url } = req.body;
   const background = Array.isArray(req.body.background)
     ? String(req.body.background[0]).trim()
     : String(req.body.background || '').trim();
-
   const durationSecs = DURATION_SECONDS[duration];
   const levels = MIX_LEVELS[volume];
   const voiceVolume = levels && levels.voice;
@@ -429,17 +405,14 @@ app.post('/mix', async (req, res) => {
   if (!voiceVolume) {
     return res.status(400).json({ success: false, error: `Unknown volume: ${volume}` });
   }
-
   console.log('background =', background);
   console.log('voice_url =', voice_url);
-
   // ---- ASYNC MIXING (added 17 Jul 2026) ----------------------------------
   // Long tracks (4 hours) take far longer than Make's 5-minute HTTP ceiling,
   // so we fix the output filename NOW, reply immediately, render in the
   // background, and tell Make via callback_url when the track is ready.
   const remoteFilename = `mixed/${respondent_id}-${Date.now()}-mixed.mp3`;
   const downloadUrl = `${CDN_BASE}/${remoteFilename}`;
-
   // Fields echoed back to the Make "Track Ready" webhook.
   const passthrough = {
     respondent_id,
@@ -450,7 +423,6 @@ app.post('/mix', async (req, res) => {
     risk: req.body.risk || ''
   };
   if (req.body.gift_date) passthrough.gift_date = req.body.gift_date; // omit when empty: delivery filter relies on absence
-
   function postCallback(payload) {
     if (!callback_url) return Promise.resolve();
     return new Promise((resolve) => {
@@ -470,10 +442,8 @@ app.post('/mix', async (req, res) => {
       } catch (e) { console.error('Callback error:', e.message); resolve(); }
     });
   }
-
   // Reply straight away so Make never times out.
   res.json({ success: true, status: 'processing', download_url: downloadUrl });
-
   // Render + upload in the background.
   (async () => {
     const tmpDir = `/tmp/${respondent_id}-${Date.now()}`;
@@ -483,7 +453,6 @@ app.post('/mix', async (req, res) => {
     const outputPath = path.join(tmpDir, 'mixed.mp3');
     try {
       await downloadFile(voice_url, voicePath);
-
       // ---- AUDIO QUALITY FIXES (18 Jul 2026) ------------------------------
       // 1. White noise is now GENERATED inside ffmpeg (anoisesrc), not looped
       //    from an MP3 file: endless, perfectly seamless (no loop glitches),
@@ -499,16 +468,27 @@ app.post('/mix', async (req, res) => {
       //    Pink noise (softer, warmer than white) is supported the same way:
       //    any background URL containing "pink-noise" generates pink noise —
       //    the URL doesn't need to point at a real file.
+      // ---- BACKGROUND BALANCE FIX (18 Jul 2026 PM2) -----------------------
+      // 4. Every background is first AUTO-LEVELLED (loudnorm) to a common
+      //    loudness, so the different source recordings (which span ~34dB)
+      //    all sit the same and one MIX_LEVELS setting fits them all.
+      // 5. The background is DUCKED under the voice (sidechaincompress): it
+      //    eases back whenever an affirmation plays and fills the gaps, so the
+      //    words stay clear AND the background is audible. A light compressor
+      //    tames peaks so a present bed doesn't spike over a whisper. This is
+      //    what makes whisper-over-any-background come out balanced.
       const noiseColour = /pink-noise/i.test(background) ? 'pink'
                         : /white-noise/i.test(background) ? 'white' : null;
-
       const filterChain =
-        `[bg0]volume=${levels.bg}[bg];` +
+        `[bg0]loudnorm=I=-23:TP=-2:LRA=11[bgn];` +
+        `[bgn]volume=${levels.bg}[bgv];` +
+        `[bgv]acompressor=threshold=0.0316:ratio=6:attack=8:release=220[bgc];` +
         `[1:a]apad=pad_dur=2,volume=${levels.voice}[padded];` +
         `[padded]aloop=loop=-1:size=2147483647[voiceloop];` +
-        `[bg][voiceloop]amix=inputs=2:duration=first:normalize=0[mix];` +
+        `[voiceloop]asplit=2[voicemix][voicekey];` +
+        `[bgc][voicekey]sidechaincompress=threshold=0.03:ratio=10:attack=10:release=320[bgducked];` +
+        `[bgducked][voicemix]amix=inputs=2:duration=first:normalize=0[mix];` +
         `[mix]alimiter=limit=0.95[out]`;
-
       let ffArgs;
       if (noiseColour) {
         ffArgs = [
@@ -535,9 +515,7 @@ app.post('/mix', async (req, res) => {
           outputPath, '-y'
         ];
       }
-
       await runFfmpeg(ffArgs);
-
       await uploadToBunny(outputPath, remoteFilename);
       fs.rmSync(tmpDir, { recursive: true, force: true });
       console.log('Mix complete:', remoteFilename);
@@ -549,7 +527,6 @@ app.post('/mix', async (req, res) => {
     }
   })();
 });
-
 // ---------------------------------------------------------------------------
 // SOUND PREVIEW (added 18 Jul 2026) — hear any background exactly as the mixer
 // renders it, WITHOUT ordering a track (no voice, no ElevenLabs credits, no
@@ -574,10 +551,8 @@ app.get('/preview', async (req, res) => {
     const bgvol = dbOk(req.query.bgvol) ? req.query.bgvol : '0dB';
     const secs = Math.min(parseInt(req.query.secs, 10) || 60, 300);
     if (!sound) return res.status(400).send('Add ?sound=white, ?sound=pink, or ?sound=<mp3 url>');
-
     const colour = /^pink$/i.test(sound) || /pink-noise/i.test(sound) ? 'pink'
                  : /^white$/i.test(sound) || /white-noise/i.test(sound) ? 'white' : null;
-
     let inputArgs;
     const tmpFiles = [];
     if (colour) {
@@ -590,7 +565,6 @@ app.get('/preview', async (req, res) => {
       tmpFiles.push(bgTmp);
       inputArgs = ['-stream_loop', '-1', '-i', bgTmp];
     }
-
     const bgLabel = (colour ? '[0:a]pan=stereo|c0=c0|c1=c0[bg0];' : '[0:a]anull[bg0];') + `[bg0]volume=${bgvol}[bg];`;
     let filter, extraInputs = [];
     if (voice) {
@@ -612,7 +586,6 @@ app.get('/preview', async (req, res) => {
     } else {
       filter = bgLabel + '[bg]alimiter=limit=0.95[out]';
     }
-
     res.setHeader('Content-Type', 'audio/mpeg');
     const args = [
       ...inputArgs,
@@ -632,9 +605,7 @@ app.get('/preview', async (req, res) => {
     res.status(500).send('Preview failed: ' + err.message);
   }
 });
-
 app.get('/health', (req, res) => res.json({ status: 'ok', stripe: !!stripe }));
-
 const server = app.listen(3000, () => console.log('BYIV Mixer + Checkout running on port 3000'));
 server.requestTimeout = 0;
 server.headersTimeout = 65000;
