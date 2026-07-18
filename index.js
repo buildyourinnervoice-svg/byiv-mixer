@@ -141,7 +141,7 @@ app.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (re
   res.json({ received: true });
 });
 
-// JSON parsing for every OTHER route. 
+// JSON parsing for every OTHER route.
 // Allow the website (a different domain) to call these endpoints from the browser.
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -441,20 +441,56 @@ app.post('/mix', async (req, res) => {
     const outputPath = path.join(tmpDir, 'mixed.mp3');
     try {
       await downloadFile(voice_url, voicePath);
-      await downloadFile(background, bgPath);
 
-      await runFfmpeg([
-        '-stream_loop', '-1', '-i', bgPath,
-        '-i', voicePath,
-        '-filter_complex',
+      // ---- AUDIO QUALITY FIXES (18 Jul 2026) ------------------------------
+      // 1. White noise is now GENERATED inside ffmpeg (anoisesrc), not looped
+      //    from an MP3 file: endless, perfectly seamless (no loop glitches),
+      //    and mathematically clean (no compressed-noise "warble/alarm"
+      //    artefacts from re-encoding an already-lossy noise file).
+      // 2. amix previously halved the level of both inputs (its default
+      //    normalisation) which made every track noticeably quiet even at
+      //    full phone volume. normalize=0 keeps full loudness; a limiter
+      //    guards against clipping.
+      // 3. Output bitrate raised to constant 192k: low/variable bitrate on
+      //    noise-heavy audio is what mangles the buried affirmation voice
+      //    into audible "squeaks". Constant 192k keeps it smooth and masked.
+      const isWhiteNoise = /white-noise/i.test(background);
+
+      const filterChain =
         `[1:a]apad=pad_dur=2,volume=${voiceVolume}[padded];` +
         `[padded]aloop=loop=-1:size=2147483647[voiceloop];` +
-        `[0:a][voiceloop]amix=inputs=2:duration=first[out]`,
-        '-map', '[out]',
-        '-t', String(durationSecs),
-        '-c:a', 'libmp3lame', '-q:a', '2',
-        outputPath, '-y'
-      ]);
+        `[bg][voiceloop]amix=inputs=2:duration=first:normalize=0[mix];` +
+        `[mix]alimiter=limit=0.95[out]`;
+
+      let ffArgs;
+      if (isWhiteNoise) {
+        // Two independent noise generators joined as stereo = natural, wide noise.
+        ffArgs = [
+          '-f', 'lavfi',
+          '-i', 'anoisesrc=colour=white:sample_rate=44100:amplitude=0.35:seed=1,aformat=channel_layouts=mono',
+          '-i', voicePath,
+          '-filter_complex',
+          `[0:a]pan=stereo|c0=c0|c1=c0[bg];` + filterChain,
+          '-map', '[out]',
+          '-t', String(durationSecs),
+          '-c:a', 'libmp3lame', '-b:a', '192k',
+          outputPath, '-y'
+        ];
+      } else {
+        await downloadFile(background, bgPath);
+        ffArgs = [
+          '-stream_loop', '-1', '-i', bgPath,
+          '-i', voicePath,
+          '-filter_complex',
+          `[0:a]anull[bg];` + filterChain,
+          '-map', '[out]',
+          '-t', String(durationSecs),
+          '-c:a', 'libmp3lame', '-b:a', '192k',
+          outputPath, '-y'
+        ];
+      }
+
+      await runFfmpeg(ffArgs);
 
       await uploadToBunny(outputPath, remoteFilename);
       fs.rmSync(tmpDir, { recursive: true, force: true });
