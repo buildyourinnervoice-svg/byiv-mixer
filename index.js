@@ -197,7 +197,7 @@ const CDN_BASE = 'https://cdn.buildyourinnervoice.com';
 // ---------------------------------------------------------------------------
 const MIX_LEVELS = {
   'None (Subliminal only)': { voice: '-60dB', bg: '0dB'   },
-  'A little (Whispered)':   { voice: '-12dB',  bg: '-16dB' },
+  'A little (Whispered)':   { voice: '-12dB', bg: '-16dB' },  // -9 was still too loud for a whisper (owner listen-test 19 Jul); -12 approved
   'Fully (Clear voice)':    { voice: '0dB',   bg: '-16dB' }
 };
 const DURATION_SECONDS = {
@@ -556,18 +556,31 @@ app.post('/mix', async (req, res) => {
 // NOTE (18 Jul fix): the old validation regex only accepted 0..-39dB and
 // SILENTLY fell back to the default for anything lower — which is why -45dB
 // and -50dB tests sounded identical. Now accepts the full 0..-99dB range.
-// NOTE (19 Jul): this preview still uses a PLAIN mix (no loudnorm, no ducking),
-// so it will NOT sound identical to a delivered track. To make previews match,
-// mirror the /mix filterChain here (loudnorm on bg + voice, sidechaincompress
-// duck, MIX_LEVELS). Left as-is for now to keep previews cheap/fast.
+// ALIGNED WITH /mix (19 Jul 2026): previews now use the SAME processing chain
+// as delivered tracks — background loudnorm to -23 LUFS, MIX_LEVELS offsets,
+// light compressor, voice loudnorm + sidechain duck — so what customers hear
+// in a preview is what they get in a track.
+//   /preview?sound=<white|pink|mp3 url>                (background only, tier-levelled)
+//   &tier=subliminal|whispered|full                    (default: subliminal)
+//   &voice=<mp3 URL or order id>                       (optional voice layer)
+//   &secs=90                                           (default 60, max 300)
+// Legacy &voicevol= / &bgvol= raw-dB overrides still work and bypass the tier.
 // ---------------------------------------------------------------------------
+const PREVIEW_TIERS = {
+  subliminal: 'None (Subliminal only)',
+  whispered: 'A little (Whispered)',
+  full: 'Fully (Clear voice)'
+};
 app.get('/preview', async (req, res) => {
   try {
     const sound = String(req.query.sound || '').trim();
     const voice = String(req.query.voice || '').trim();
     const dbOk = (v) => /^(0|-[1-9][0-9]?)dB$/.test(String(v || ''));
-    const voicevol = dbOk(req.query.voicevol) ? req.query.voicevol : '-60dB';
-    const bgvol = dbOk(req.query.bgvol) ? req.query.bgvol : '0dB';
+    const tierKey = PREVIEW_TIERS[String(req.query.tier || 'subliminal').toLowerCase()] || PREVIEW_TIERS.subliminal;
+    const levels = MIX_LEVELS[tierKey];
+    // Raw-dB overrides (legacy/testing) take precedence over the tier.
+    const voicevol = dbOk(req.query.voicevol) ? req.query.voicevol : levels.voice;
+    const bgvol = dbOk(req.query.bgvol) ? req.query.bgvol : levels.bg;
     const secs = Math.min(parseInt(req.query.secs, 10) || 60, 300);
     if (!sound) return res.status(400).send('Add ?sound=white, ?sound=pink, or ?sound=<mp3 url>');
     const colour = /^pink$/i.test(sound) || /pink-noise/i.test(sound) ? 'pink'
@@ -584,7 +597,11 @@ app.get('/preview', async (req, res) => {
       tmpFiles.push(bgTmp);
       inputArgs = ['-stream_loop', '-1', '-i', bgTmp];
     }
-    const bgLabel = (colour ? '[0:a]pan=stereo|c0=c0|c1=c0[bg0];' : '[0:a]anull[bg0];') + `[bg0]volume=${bgvol}[bg];`;
+    // Same background conditioning as /mix: loudnorm -> tier offset -> light compressor.
+    const bgLabel = (colour ? '[0:a]pan=stereo|c0=c0|c1=c0[bg0];' : '[0:a]anull[bg0];') +
+      `[bg0]loudnorm=I=-23:TP=-2:LRA=11[bgn];` +
+      `[bgn]volume=${bgvol}[bgv];` +
+      `[bgv]acompressor=threshold=0.0316:ratio=6:attack=8:release=220[bg];`;
     let filter, extraInputs = [];
     if (voice) {
       // voice can be a full https URL, or just an order/submission id — in
@@ -597,10 +614,13 @@ app.get('/preview', async (req, res) => {
       await downloadFile(voiceUrl, vTmp);
       tmpFiles.push(vTmp);
       extraInputs = ['-i', vTmp];
+      // Same voice conditioning + sidechain duck as /mix.
       filter = bgLabel +
-        `[1:a]apad=pad_dur=2,volume=${voicevol}[padded];` +
+        `[1:a]loudnorm=I=-19:TP=-2:LRA=11,apad=pad_dur=2,volume=${voicevol}[padded];` +
         `[padded]aloop=loop=-1:size=2147483647[voiceloop];` +
-        `[bg][voiceloop]amix=inputs=2:duration=first:normalize=0[mix];` +
+        `[voiceloop]asplit=2[voicemix][voicekey];` +
+        `[bg][voicekey]sidechaincompress=threshold=0.05:ratio=2.5:attack=20:release=250[bgducked];` +
+        `[bgducked][voicemix]amix=inputs=2:duration=first:normalize=0[mix];` +
         `[mix]alimiter=limit=0.95[out]`;
     } else {
       filter = bgLabel + '[bg]alimiter=limit=0.95[out]';
