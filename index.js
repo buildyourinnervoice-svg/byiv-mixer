@@ -530,10 +530,39 @@ app.post('/mix', async (req, res) => {
           outputPath, '-y'
         ];
       }
-      await runFfmpeg(ffArgs);
+      // ---- AUTO-VERIFY + AUTO-RETRY (19 Jul 2026) --------------------------
+      // Verify inputs actually downloaded (a 0-byte voice or background file
+      // would previously render a broken track and deliver it silently), then
+      // render, then sanity-check the output size against the expected size
+      // for a 192kbps CBR file of this duration (catches truncated/corrupt
+      // renders). One automatic retry before escalating via the failure
+      // callback — so the owner is only bothered by genuine repeat failures.
+      const vSize = fs.statSync(voicePath).size;
+      if (vSize < 1000) throw new Error(`Voice file too small (${vSize} bytes) — download failed?`);
+      if (!noiseColour) {
+        const bSize = fs.statSync(bgPath).size;
+        if (bSize < 10000) throw new Error(`Background file too small (${bSize} bytes) — download failed?`);
+      }
+      const expectedBytes = durationSecs * 24000; // 192kbps ≈ 24,000 bytes/sec
+      let renderAttempt = 0, renderOk = false, renderErr = null;
+      while (renderAttempt < 2 && !renderOk) {
+        renderAttempt++;
+        try {
+          await runFfmpeg(ffArgs);
+          const outSize = fs.statSync(outputPath).size;
+          if (outSize < expectedBytes * 0.8 || outSize > expectedBytes * 1.3) {
+            throw new Error(`Output failed size sanity check (attempt ${renderAttempt}): ${outSize} bytes vs ~${expectedBytes} expected for ${durationSecs}s`);
+          }
+          renderOk = true;
+        } catch (err) {
+          renderErr = err;
+          console.error(`Render attempt ${renderAttempt} failed:`, err.message);
+        }
+      }
+      if (!renderOk) throw renderErr;
       await uploadToBunny(outputPath, remoteFilename);
       fs.rmSync(tmpDir, { recursive: true, force: true });
-      console.log('Mix complete:', remoteFilename);
+      console.log(`Mix complete (attempt ${renderAttempt}):`, remoteFilename);
       await postCallback({ status: 'success', download_url: downloadUrl, ...passthrough });
     } catch (err) {
       console.error('MIX ERROR:', err.message);
