@@ -197,7 +197,7 @@ const CDN_BASE = 'https://cdn.buildyourinnervoice.com';
 // ---------------------------------------------------------------------------
 const MIX_LEVELS = {
   'None (Subliminal only)': { voice: '-60dB', bg: '0dB'   },
-  'A little (Whispered)':   { voice: '-9dB',  bg: '-16dB' },
+  'A little (Whispered)':   { voice: '-12dB',  bg: '-16dB' },
   'Fully (Clear voice)':    { voice: '0dB',   bg: '-16dB' }
 };
 const DURATION_SECONDS = {
