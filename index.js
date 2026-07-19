@@ -174,24 +174,31 @@ const BUNNY_STORAGE_ZONE = 'build-your-inner-voice';
 const BUNNY_API_KEY = process.env.BUNNY_API_KEY;
 const CDN_BASE = 'https://cdn.buildyourinnervoice.com';
 // ---------------------------------------------------------------------------
-// Per-tier mix levels (reworked 18 Jul 2026 PM2 — measurement + listening based).
+// Per-tier mix levels (reworked 18 Jul 2026 PM2 — measurement + listening based,
+// then RE-BALANCED 19 Jul 2026 after owner listening test — see notes below).
 // The background is FIRST auto-levelled to a common loudness (loudnorm, in the
-// filter below), so these bg values are offsets from that NORMALISED level and
-// behave consistently for EVERY background sound — including any new one added
-// later, with nothing to hand-tune. The background is also DUCKED under the
-// voice (sidechaincompress) so the words stay clear while the bed fills the
-// gaps. Ducking only triggers when the voice is loud enough, so Subliminal
+// filter below), and as of 19 Jul the VOICE is auto-levelled the same way, so
+// these bg/voice values are offsets from a NORMALISED level and behave
+// consistently for EVERY background sound AND every voice render — nothing to
+// hand-tune per order. The background is also DUCKED under the voice
+// (sidechaincompress) so the words stay clear while the bed fills the gaps.
+// Ducking only triggers when the voice is loud enough, so Subliminal
 // (voice -60dB) is unaffected and the background stays full there.
 //   Subliminal: voice buried (inaudible), background full.
-//   Whispered:  words lead gently, background present but ducked under them.
+//   Whispered:  words lead gently, background present but eased under them.
 //   Full voice: voice leads clearly, background a light bed.
-// (Previously Whispered was bg -30dB, which buried every background — that was
-//  the "can't hear the rain" bug.)
+//
+// 19 Jul 2026 RE-BALANCE (owner listening test on Gentle Rain):
+//   - Whispered was voice -18dB / bg -9dB, which put the RAIN LOUDER than the
+//     whisper (voice sat UNDER the bed) — "rain too loud to hear the whisper".
+//     Now voice -9dB / bg -16dB so the whisper gently leads.
+//   - Full voice bg nudged -14dB -> -16dB to sit under the (now gentler) duck.
+//   - These are listen-test starting values; adjust in ~2-3dB steps if needed.
 // ---------------------------------------------------------------------------
 const MIX_LEVELS = {
   'None (Subliminal only)': { voice: '-60dB', bg: '0dB'   },
-  'A little (Whispered)':   { voice: '-18dB', bg: '-9dB'  },
-  'Fully (Clear voice)':    { voice: '0dB',   bg: '-14dB' }
+  'A little (Whispered)':   { voice: '-9dB',  bg: '-16dB' },
+  'Fully (Clear voice)':    { voice: '0dB',   bg: '-16dB' }
 };
 const DURATION_SECONDS = {
   '5 minutes': 300,
@@ -477,16 +484,24 @@ app.post('/mix', async (req, res) => {
       //    words stay clear AND the background is audible. A light compressor
       //    tames peaks so a present bed doesn't spike over a whisper. This is
       //    what makes whisper-over-any-background come out balanced.
+      // ---- 19 Jul 2026 RE-BALANCE (owner listening test) ------------------
+      // 6. The VOICE is now auto-levelled too (loudnorm on [1:a]) so a quiet
+      //    ElevenLabs render can't bury itself — the MIX_LEVELS numbers now
+      //    mean the same thing every time.
+      // 7. The duck was ratio 10:1 (threshold 0.03) which SLAMMED the bed to
+      //    near-silence on every word — "the rain stops every time she speaks".
+      //    Softened to ratio 2.5:1 (threshold 0.05) so the bed only eases a few
+      //    dB under the voice and flows back naturally.
       const noiseColour = /pink-noise/i.test(background) ? 'pink'
                         : /white-noise/i.test(background) ? 'white' : null;
       const filterChain =
         `[bg0]loudnorm=I=-23:TP=-2:LRA=11[bgn];` +
         `[bgn]volume=${levels.bg}[bgv];` +
         `[bgv]acompressor=threshold=0.0316:ratio=6:attack=8:release=220[bgc];` +
-        `[1:a]apad=pad_dur=2,volume=${levels.voice}[padded];` +
+        `[1:a]loudnorm=I=-19:TP=-2:LRA=11,apad=pad_dur=2,volume=${levels.voice}[padded];` +
         `[padded]aloop=loop=-1:size=2147483647[voiceloop];` +
         `[voiceloop]asplit=2[voicemix][voicekey];` +
-        `[bgc][voicekey]sidechaincompress=threshold=0.03:ratio=10:attack=10:release=320[bgducked];` +
+        `[bgc][voicekey]sidechaincompress=threshold=0.05:ratio=2.5:attack=20:release=250[bgducked];` +
         `[bgducked][voicemix]amix=inputs=2:duration=first:normalize=0[mix];` +
         `[mix]alimiter=limit=0.95[out]`;
       let ffArgs;
@@ -541,6 +556,10 @@ app.post('/mix', async (req, res) => {
 // NOTE (18 Jul fix): the old validation regex only accepted 0..-39dB and
 // SILENTLY fell back to the default for anything lower — which is why -45dB
 // and -50dB tests sounded identical. Now accepts the full 0..-99dB range.
+// NOTE (19 Jul): this preview still uses a PLAIN mix (no loudnorm, no ducking),
+// so it will NOT sound identical to a delivered track. To make previews match,
+// mirror the /mix filterChain here (loudnorm on bg + voice, sidechaincompress
+// duck, MIX_LEVELS). Left as-is for now to keep previews cheap/fast.
 // ---------------------------------------------------------------------------
 app.get('/preview', async (req, res) => {
   try {
