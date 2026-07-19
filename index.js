@@ -157,6 +157,24 @@ app.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (re
       }
     }
   }
+  // ---- REFUND CONFIRMATION (19 Jul 2026) ----------------------------------
+  // When a refund is issued in Stripe, forward it to the Make refund scenario,
+  // which emails the customer a branded confirmation and the owner an FYI.
+  // REQUIRES: 'charge.refunded' added to the Stripe webhook's listened events.
+  if (event.type === 'charge.refunded') {
+    const ch = event.data.object;
+    const refundPayload = {
+      email: (ch.billing_details && ch.billing_details.email) || ch.receipt_email || '',
+      amount: (ch.amount_refunded || 0) / 100,
+      charge_id: ch.id
+    };
+    try {
+      await postJson('https://hook.eu1.make.com/9oaorq6cwktpfqe2ry7cnpu7k714klro', refundPayload);
+      console.log('Refund forwarded to Make:', ch.id, refundPayload.amount);
+    } catch (err) {
+      console.error('Refund forward failed (non-fatal):', err.message);
+    }
+  }
   res.json({ received: true });
 });
 // JSON parsing for every OTHER route.
