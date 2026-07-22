@@ -450,7 +450,8 @@ app.post('/mix', async (req, res) => {
   const durationSecs = DURATION_SECONDS[duration];
   const levels = MIX_LEVELS[volume];
 const isSubliminal = volume === 'None (Subliminal only)';
-const voiceDb = isSubliminal ? subliminalVoiceDb(background) : levels.voice;
+// Whispered over the near-silent binaural bed needs its own, much lower level.
+const voiceDb = isSubliminal ? subliminalVoiceDb(background) : (volume === 'A little (Whispered)' && /binaural/i.test(String(background)) ? '-26dB' : levels.voice);
 const voiceComp = isSubliminal ? SUBLIMINAL_VOICE_COMP : '';
 // Subliminal: NO ducking - the bed must stay perfectly steady (a duck keyed
 // by an inaudible voice reads as rhythmic vibration under the background).
@@ -662,7 +663,7 @@ app.get('/preview', async (req, res) => {
     const tierKey = PREVIEW_TIERS[String(req.query.tier || 'subliminal').toLowerCase()] || PREVIEW_TIERS.subliminal;
     const levels = MIX_LEVELS[tierKey];
     // Raw-dB overrides (legacy/testing) take precedence over the tier.
-    const voicevol = dbOk(req.query.voicevol) ? req.query.voicevol : (tierKey === PREVIEW_TIERS.subliminal ? subliminalVoiceDb(sound) : levels.voice);
+    const voicevol = dbOk(req.query.voicevol) ? req.query.voicevol : (tierKey === PREVIEW_TIERS.subliminal ? subliminalVoiceDb(sound) : (tierKey === PREVIEW_TIERS.whispered && /binaural/i.test(sound) ? '-26dB' : levels.voice));
 const subComp = (tierKey === PREVIEW_TIERS.subliminal && !dbOk(req.query.voicevol)) ? SUBLIMINAL_VOICE_COMP : "";
 const duckThresh = (tierKey === PREVIEW_TIERS.subliminal && !dbOk(req.query.voicevol)) ? 1 : 0.05;
     const bgvol = dbOk(req.query.bgvol) ? req.query.bgvol : levels.bg;
