@@ -218,6 +218,35 @@ const MIX_LEVELS = {
   'A little (Whispered)':   { voice: '-12dB', bg: '-16dB' },  // -9 was still too loud for a whisper (owner listen-test 19 Jul); -12 approved
   'Fully (Clear voice)':    { voice: '0dB',   bg: '-16dB' }
 };
+// ---- Subliminal loudness (22 Jul 2026, handover) ---------------------------
+// Voice as loud as possible while staying unintelligible, per background:
+// dense broadband beds (noise, rain, ocean, stream) mask speech well, so the
+// voice can sit higher; sparse or tonal beds (forest, ambient, binaural) mask
+// far less, so it must stay lower. Offsets apply AFTER voice loudnorm -19 LUFS.
+// We make no claims that inaudible affirmations work - this only makes the
+// opt-in subliminal tier as present as it can safely be. Tune in 2dB steps.
+const SUBLIMINAL_VOICE_LEVELS = [
+  { re: /white-noise|pink-noise/i, db: '-26dB' },
+  { re: /rain/i, db: '-28dB' },
+  { re: /ocean|wave/i, db: '-28dB' },
+  { re: /stream|brook|water/i, db: '-29dB' },
+  { re: /forest|bird/i, db: '-32dB' },
+  { re: /ambient|meditat/i, db: '-32dB' },
+  { re: /binaural/i, db: '-34dB' }
+];
+function subliminalVoiceDb(bg) {
+  for (const s of SUBLIMINAL_VOICE_LEVELS) { if (s.re.test(String(bg))) return s.db; }
+  return '-30dB';
+}
+// Light compression on the subliminal voice only: evens out word peaks so no
+// syllable pokes above the masking bed.
+const SUBLIMINAL_VOICE_COMP = ',acompressor=threshold=0.02:ratio=4:attack=12:release=250';
+// Pretty download name: BYIV-<Sound>-<Focus>-<id>.mp3 (handover change 2).
+function slugName(s) {
+  return String(s || '').replace(/.mp3$/i, '').split('/').pop()
+    .replace(/&/g, 'and').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '')
+    .replace(/[a-z]/g, function (c) { return c.toUpperCase(); }).slice(0, 40) || 'Track';
+}
 const DURATION_SECONDS = {
   '5 minutes': 300,
   '10 minutes': 600,
@@ -420,6 +449,9 @@ app.post('/mix', async (req, res) => {
     : String(req.body.background || '').trim();
   const durationSecs = DURATION_SECONDS[duration];
   const levels = MIX_LEVELS[volume];
+const isSubliminal = volume === 'None (Subliminal only)';
+const voiceDb = isSubliminal ? subliminalVoiceDb(background) : levels.voice;
+const voiceComp = isSubliminal ? SUBLIMINAL_VOICE_COMP : '';
   const voiceVolume = levels && levels.voice;
   if (!voice_url || !background || !respondent_id) {
     return res.status(400).json({ success: false, error: 'Missing voice_url, background, or respondent_id' });
@@ -436,7 +468,8 @@ app.post('/mix', async (req, res) => {
   // Long tracks (4 hours) take far longer than Make's 5-minute HTTP ceiling,
   // so we fix the output filename NOW, reply immediately, render in the
   // background, and tell Make via callback_url when the track is ready.
-  const remoteFilename = `mixed/${respondent_id}-${Date.now()}-mixed.mp3`;
+  const soundLabel = /pink-noise/i.test(background) ? "Pink-Noise" : /white-noise/i.test(background) ? "White-Noise" : slugName(background);
+const remoteFilename = `mixed/BYIV-${soundLabel}-${slugName(req.body.focus)}-${Date.now().toString(36)}.mp3`;
   const downloadUrl = `${CDN_BASE}/${remoteFilename}`;
   // Fields echoed back to the Make "Track Ready" webhook.
   const passthrough = {
@@ -516,7 +549,7 @@ app.post('/mix', async (req, res) => {
         `[bg0]loudnorm=I=-23:TP=-2:LRA=11[bgn];` +
         `[bgn]volume=${levels.bg}[bgv];` +
         `[bgv]acompressor=threshold=0.0316:ratio=6:attack=8:release=220[bgc];` +
-        `[1:a]loudnorm=I=-19:TP=-2:LRA=11,apad=pad_dur=2,volume=${levels.voice}[padded];` +
+        `[1:a]loudnorm=I=-19:TP=-2:LRA=11,apad=pad_dur=2,volume=${voiceDb}${voiceComp}[padded];` +
         `[padded]aloop=loop=-1:size=2147483647[voiceloop];` +
         `[voiceloop]asplit=2[voicemix][voicekey];` +
         `[bgc][voicekey]sidechaincompress=threshold=0.05:ratio=2.5:attack=20:release=250[bgducked];` +
@@ -626,7 +659,8 @@ app.get('/preview', async (req, res) => {
     const tierKey = PREVIEW_TIERS[String(req.query.tier || 'subliminal').toLowerCase()] || PREVIEW_TIERS.subliminal;
     const levels = MIX_LEVELS[tierKey];
     // Raw-dB overrides (legacy/testing) take precedence over the tier.
-    const voicevol = dbOk(req.query.voicevol) ? req.query.voicevol : levels.voice;
+    const voicevol = dbOk(req.query.voicevol) ? req.query.voicevol : (tierKey === PREVIEW_TIERS.subliminal ? subliminalVoiceDb(sound) : levels.voice);
+const subComp = (tierKey === PREVIEW_TIERS.subliminal && !dbOk(req.query.voicevol)) ? SUBLIMINAL_VOICE_COMP : "";
     const bgvol = dbOk(req.query.bgvol) ? req.query.bgvol : levels.bg;
     const secs = Math.min(parseInt(req.query.secs, 10) || 60, 300);
     if (!sound) return res.status(400).send('Add ?sound=white, ?sound=pink, or ?sound=<mp3 url>');
@@ -663,7 +697,7 @@ app.get('/preview', async (req, res) => {
       extraInputs = ['-i', vTmp];
       // Same voice conditioning + sidechain duck as /mix.
       filter = bgLabel +
-        `[1:a]loudnorm=I=-19:TP=-2:LRA=11,apad=pad_dur=2,volume=${voicevol}[padded];` +
+        `[1:a]loudnorm=I=-19:TP=-2:LRA=11,apad=pad_dur=2,volume=${voicevol}${subComp}[padded];` +
         `[padded]aloop=loop=-1:size=2147483647[voiceloop];` +
         `[voiceloop]asplit=2[voicemix][voicekey];` +
         `[bg][voicekey]sidechaincompress=threshold=0.05:ratio=2.5:attack=20:release=250[bgducked];` +
