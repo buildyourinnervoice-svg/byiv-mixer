@@ -452,6 +452,9 @@ app.post('/mix', async (req, res) => {
 const isSubliminal = volume === 'None (Subliminal only)';
 const voiceDb = isSubliminal ? subliminalVoiceDb(background) : levels.voice;
 const voiceComp = isSubliminal ? SUBLIMINAL_VOICE_COMP : '';
+// Subliminal: NO ducking - the bed must stay perfectly steady (a duck keyed
+// by an inaudible voice reads as rhythmic vibration under the background).
+const duckThresh = isSubliminal ? 1 : 0.05;
   const voiceVolume = levels && levels.voice;
   if (!voice_url || !background || !respondent_id) {
     return res.status(400).json({ success: false, error: 'Missing voice_url, background, or respondent_id' });
@@ -552,7 +555,7 @@ const remoteFilename = `mixed/BYIV-${soundLabel}-${slugName(req.body.focus)}-${D
         `[1:a]loudnorm=I=-19:TP=-2:LRA=11,apad=pad_dur=2,volume=${voiceDb}${voiceComp}[padded];` +
         `[padded]aloop=loop=-1:size=2147483647[voiceloop];` +
         `[voiceloop]asplit=2[voicemix][voicekey];` +
-        `[bgc][voicekey]sidechaincompress=threshold=0.05:ratio=2.5:attack=20:release=250[bgducked];` +
+        `[bgc][voicekey]sidechaincompress=threshold=${duckThresh}:ratio=2.5:attack=20:release=250[bgducked];` +
         `[bgducked][voicemix]amix=inputs=2:duration=first:normalize=0[mix];` +
         `[mix]alimiter=limit=0.95[out]`;
       let ffArgs;
@@ -661,6 +664,7 @@ app.get('/preview', async (req, res) => {
     // Raw-dB overrides (legacy/testing) take precedence over the tier.
     const voicevol = dbOk(req.query.voicevol) ? req.query.voicevol : (tierKey === PREVIEW_TIERS.subliminal ? subliminalVoiceDb(sound) : levels.voice);
 const subComp = (tierKey === PREVIEW_TIERS.subliminal && !dbOk(req.query.voicevol)) ? SUBLIMINAL_VOICE_COMP : "";
+const duckThresh = (tierKey === PREVIEW_TIERS.subliminal && !dbOk(req.query.voicevol)) ? 1 : 0.05;
     const bgvol = dbOk(req.query.bgvol) ? req.query.bgvol : levels.bg;
     const secs = Math.min(parseInt(req.query.secs, 10) || 60, 300);
     if (!sound) return res.status(400).send('Add ?sound=white, ?sound=pink, or ?sound=<mp3 url>');
@@ -700,7 +704,7 @@ const subComp = (tierKey === PREVIEW_TIERS.subliminal && !dbOk(req.query.voicevo
         `[1:a]loudnorm=I=-19:TP=-2:LRA=11,apad=pad_dur=2,volume=${voicevol}${subComp}[padded];` +
         `[padded]aloop=loop=-1:size=2147483647[voiceloop];` +
         `[voiceloop]asplit=2[voicemix][voicekey];` +
-        `[bg][voicekey]sidechaincompress=threshold=0.05:ratio=2.5:attack=20:release=250[bgducked];` +
+        `[bg][voicekey]sidechaincompress=threshold=${duckThresh}:ratio=2.5:attack=20:release=250[bgducked];` +
         `[bgducked][voicemix]amix=inputs=2:duration=first:normalize=0[mix];` +
         `[mix]alimiter=limit=0.95[out]`;
     } else {
