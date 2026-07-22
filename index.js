@@ -232,7 +232,7 @@ const SUBLIMINAL_VOICE_LEVELS = [
   { re: /stream|brook|water/i, db: '-31dB' },
   { re: /forest|bird/i, db: '-32dB' },
   { re: /ambient|meditat/i, db: '-32dB' },
-  { re: /binaural/i, db: '-34dB' }
+  { re: /binaural/i, db: '-40dB' }
 ];
 function subliminalVoiceDb(bg) {
   for (const s of SUBLIMINAL_VOICE_LEVELS) { if (s.re.test(String(bg))) return s.db; }
