@@ -226,10 +226,10 @@ const MIX_LEVELS = {
 // We make no claims that inaudible affirmations work - this only makes the
 // opt-in subliminal tier as present as it can safely be. Tune in 2dB steps.
 const SUBLIMINAL_VOICE_LEVELS = [
-  { re: /white-noise|pink-noise/i, db: '-26dB' },
-  { re: /rain/i, db: '-28dB' },
-  { re: /ocean|wave/i, db: '-28dB' },
-  { re: /stream|brook|water/i, db: '-29dB' },
+  { re: /white-noise|pink-noise/i, db: '-29dB' },
+  { re: /rain/i, db: '-31dB' },
+  { re: /ocean|wave/i, db: '-31dB' },
+  { re: /stream|brook|water/i, db: '-31dB' },
   { re: /forest|bird/i, db: '-32dB' },
   { re: /ambient|meditat/i, db: '-32dB' },
   { re: /binaural/i, db: '-34dB' }
@@ -240,7 +240,7 @@ function subliminalVoiceDb(bg) {
 }
 // Light compression on the subliminal voice only: evens out word peaks so no
 // syllable pokes above the masking bed.
-const SUBLIMINAL_VOICE_COMP = ',acompressor=threshold=0.02:ratio=4:attack=12:release=250';
+const SUBLIMINAL_VOICE_COMP = ',highpass=f=280:poles=2,lowpass=f=4500,acompressor=threshold=0.02:ratio=4:attack=12:release=250';
 // Pretty download name: BYIV-<Sound>-<Focus>-<id>.mp3 (handover change 2).
 function slugName(s) {
   return String(s || '').replace(/.mp3$/i, '').split('/').pop()
