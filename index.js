@@ -215,7 +215,7 @@ const CDN_BASE = 'https://cdn.buildyourinnervoice.com';
 // ---------------------------------------------------------------------------
 const MIX_LEVELS = {
   'None (Subliminal only)': { voice: '-60dB', bg: '0dB'   },
-  'A little (Whispered)':   { voice: '-12dB', bg: '-16dB' },  // -9 was still too loud for a whisper (owner listen-test 19 Jul); -12 approved
+  'A little (Whispered)':   { voice: '-18dB', bg: '-16dB' },  // -9 was still too loud for a whisper (owner listen-test 19 Jul); -12 approved
   'Fully (Clear voice)':    { voice: '0dB',   bg: '-16dB' }
 };
 // ---- Subliminal loudness (22 Jul 2026, handover) ---------------------------
