@@ -66,7 +66,7 @@ function computePrice(o) {
   const gift = isGift(o);
   if (!member) return base;                        // non-member: base
   if (gift) return round2(base * 0.7);             // member gift: 30% off
-return 0; // member own track (any length incl. 4hr): free — fair use applies
+  return 0; // member own track (any length incl. 4hr): free — fair use applies
 }
 function round2(n) { return Math.round(n * 100) / 100; }
 // Build the Tally-shaped payload the Make pipeline expects, from an order + email.
@@ -245,7 +245,7 @@ const SUBLIMINAL_VOICE_COMP = ',highpass=f=280:poles=2,lowpass=f=4500,acompresso
 function slugName(s) {
   return String(s || '').replace(/.mp3$/i, '').split('/').pop()
     .replace(/&/g, 'and').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '')
-    .replace(/[a-z]/g, function (c) { return c.toUpperCase(); }).slice(0, 40) || 'Track';
+    .replace(/[a-z]/g, function (c) { return c.toUpperCase(); }).slice(0, 40) || 'Track';
 }
 const DURATION_SECONDS = {
   '5 minutes': 300,
@@ -345,6 +345,48 @@ function runFfmpeg(args) {
       else reject(new Error(`ffmpeg exited with code ${code}: ${lastErr}`));
     });
   });
+}
+// ---- SEAMLESS BACKGROUND LOOP (26 Jul 2026) --------------------------------
+// File-based backgrounds were looped with `-stream_loop -1`, which butt-joins
+// the clip end-to-start with no crossfade — so any clip that doesn't line up at
+// that join clicks every time it repeats (the ~2:45 glitch on forest/binaural).
+// makeSeamlessLoop pre-builds a version whose tail is CROSSFADED onto its head
+// (equal-power `qsin` curve, so the loudness stays constant — it does NOT dip
+// to quiet and back), and we loop THAT instead. Generated white/pink noise is
+// untouched (anoisesrc is already seamless). On any failure it returns false so
+// the caller keeps the raw file — this can never make a render fail.
+function ffprobeDuration(file) {
+  return new Promise((resolve) => {
+    const p = spawn('ffprobe', ['-v', 'error', '-show_entries', 'format=duration',
+      '-of', 'default=nw=1:nk=1', file]);
+    let out = '';
+    p.stdout.on('data', d => (out += d));
+    p.on('error', () => resolve(0));
+    p.on('close', () => resolve(parseFloat(String(out).trim()) || 0));
+  });
+}
+async function makeSeamlessLoop(inPath, outPath) {
+  const L = await ffprobeDuration(inPath);
+  if (!L || L < 6) return false;                 // too short to crossfade safely
+  const CF = Math.min(3, L / 4);                 // crossfade length (seconds)
+  const cf = CF.toFixed(3);
+  const midEnd = (L - CF).toFixed(3);            // mid = CF .. (L-CF)
+  const tailStart = (L - CF).toFixed(3);         // tail = (L-CF) .. L
+  const filter =
+    `[0:a]asplit=3[s1][s2][s3];` +
+    `[s1]atrim=start=0:end=${cf},asetpts=PTS-STARTPTS[head];` +
+    `[s2]atrim=start=${cf}:end=${midEnd},asetpts=PTS-STARTPTS[mid];` +
+    `[s3]atrim=start=${tailStart}:end=${L.toFixed(3)},asetpts=PTS-STARTPTS[tail];` +
+    `[tail][head]acrossfade=d=${cf}:c1=qsin:c2=qsin[seam];` +
+    `[seam][mid]concat=n=2:v=0:a=1[out]`;
+  try {
+    await runFfmpeg(['-i', inPath, '-filter_complex', filter, '-map', '[out]',
+      '-c:a', 'libmp3lame', '-b:a', '192k', outPath, '-y']);
+    return fs.statSync(outPath).size > 10000;
+  } catch (e) {
+    console.error('makeSeamlessLoop failed, will use raw loop:', e.message);
+    return false;
+  }
 }
 function uploadToBunny(localPath, remotePath) {
   const stat = fs.statSync(localPath);
@@ -449,13 +491,13 @@ app.post('/mix', async (req, res) => {
     : String(req.body.background || '').trim();
   const durationSecs = DURATION_SECONDS[duration];
   const levels = MIX_LEVELS[volume];
-const isSubliminal = volume === 'None (Subliminal only)';
-// Whispered over the near-silent binaural bed needs its own, much lower level.
-const voiceDb = isSubliminal ? subliminalVoiceDb(background) : (volume === 'A little (Whispered)' && /binaural/i.test(String(background)) ? '-26dB' : levels.voice);
-const voiceComp = isSubliminal ? SUBLIMINAL_VOICE_COMP : '';
-// Subliminal: NO ducking - the bed must stay perfectly steady (a duck keyed
-// by an inaudible voice reads as rhythmic vibration under the background).
-const duckThresh = isSubliminal ? 1 : 0.05;
+  const isSubliminal = volume === 'None (Subliminal only)';
+  // Whispered over the near-silent binaural bed needs its own, much lower level.
+  const voiceDb = isSubliminal ? subliminalVoiceDb(background) : (volume === 'A little (Whispered)' && /binaural/i.test(String(background)) ? '-26dB' : levels.voice);
+  const voiceComp = isSubliminal ? SUBLIMINAL_VOICE_COMP : '';
+  // Subliminal: NO ducking - the bed must stay perfectly steady (a duck keyed
+  // by an inaudible voice reads as rhythmic vibration under the background).
+  const duckThresh = isSubliminal ? 1 : 0.05;
   const voiceVolume = levels && levels.voice;
   if (!voice_url || !background || !respondent_id) {
     return res.status(400).json({ success: false, error: 'Missing voice_url, background, or respondent_id' });
@@ -473,7 +515,7 @@ const duckThresh = isSubliminal ? 1 : 0.05;
   // so we fix the output filename NOW, reply immediately, render in the
   // background, and tell Make via callback_url when the track is ready.
   const soundLabel = /pink-noise/i.test(background) ? "Pink-Noise" : /white-noise/i.test(background) ? "White-Noise" : slugName(background);
-const remoteFilename = `mixed/BYIV-${soundLabel}-${slugName(req.body.focus)}-${Date.now().toString(36)}.mp3`;
+  const remoteFilename = `mixed/BYIV-${soundLabel}-${slugName(req.body.focus)}-${Date.now().toString(36)}.mp3`;
   const downloadUrl = `${CDN_BASE}/${remoteFilename}`;
   // Fields echoed back to the Make "Track Ready" webhook.
   const passthrough = {
@@ -574,8 +616,18 @@ const remoteFilename = `mixed/BYIV-${soundLabel}-${slugName(req.body.focus)}-${D
         ];
       } else {
         await downloadFile(background, bgPath);
+        // Pre-build a SEAMLESS (crossfaded) loop so the repeat is inaudible and
+        // the level stays constant. Falls back to the raw file on any error —
+        // can never break a render.
+        let loopInput = bgPath;
+        try {
+          const seamlessPath = path.join(tmpDir, 'background-seamless.mp3');
+          if (await makeSeamlessLoop(bgPath, seamlessPath)) loopInput = seamlessPath;
+        } catch (e) {
+          console.error('Seamless pre-process errored, using raw loop:', e.message);
+        }
         ffArgs = [
-          '-stream_loop', '-1', '-i', bgPath,
+          '-stream_loop', '-1', '-i', loopInput,
           '-i', voicePath,
           '-filter_complex',
           `[0:a]anull[bg0];` + filterChain,
@@ -664,8 +716,8 @@ app.get('/preview', async (req, res) => {
     const levels = MIX_LEVELS[tierKey];
     // Raw-dB overrides (legacy/testing) take precedence over the tier.
     const voicevol = dbOk(req.query.voicevol) ? req.query.voicevol : (tierKey === PREVIEW_TIERS.subliminal ? subliminalVoiceDb(sound) : (tierKey === PREVIEW_TIERS.whispered && /binaural/i.test(sound) ? '-26dB' : levels.voice));
-const subComp = (tierKey === PREVIEW_TIERS.subliminal && !dbOk(req.query.voicevol)) ? SUBLIMINAL_VOICE_COMP : "";
-const duckThresh = (tierKey === PREVIEW_TIERS.subliminal && !dbOk(req.query.voicevol)) ? 1 : 0.05;
+    const subComp = (tierKey === PREVIEW_TIERS.subliminal && !dbOk(req.query.voicevol)) ? SUBLIMINAL_VOICE_COMP : "";
+    const duckThresh = (tierKey === PREVIEW_TIERS.subliminal && !dbOk(req.query.voicevol)) ? 1 : 0.05;
     const bgvol = dbOk(req.query.bgvol) ? req.query.bgvol : levels.bg;
     const secs = Math.min(parseInt(req.query.secs, 10) || 60, 300);
     if (!sound) return res.status(400).send('Add ?sound=white, ?sound=pink, or ?sound=<mp3 url>');
