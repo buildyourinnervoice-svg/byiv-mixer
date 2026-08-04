@@ -74,6 +74,10 @@ function buildPipelinePayload(o, email, orderId) {
   const durationFull = DURATION_NORMALISE[o.duration] || o.duration || '';
   return {
     submissionId: orderId,
+    // BYIV buyer first name (4 Aug 2026). Top level, like amount_paid, because the
+    // Website Orders webhook has no data structure so any key passes through intact.
+    // Empty string when absent, so Make's ifempty() fallback to "Someone" still fires.
+    buyer_name: o.buyer_name || '',
     fields: {
       'Contact Information': email,
       'Area of Focus': o.focus || '',
@@ -148,6 +152,7 @@ app.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (re
             gift_message: '',
             recipient_name: '',
             recipient_email: '',
+            buyer_name: '',
             gdpr_scrubbed: new Date().toISOString().slice(0, 10)
           }
         });
@@ -458,7 +463,8 @@ app.post('/create-checkout', async (req, res) => {
       gift_message: String(o.gift_message || '').slice(0, 480),
       gift_date: String(o.gift_date || ''),
       recipient_name: String(o.recipient_name || '').slice(0, 200),
-      recipient_email: String(o.recipient_email || '').slice(0, 200)
+      recipient_email: String(o.recipient_email || '').slice(0, 200),
+      buyer_name: String(o.buyer_name || '').slice(0, 100)
     };
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
