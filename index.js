@@ -215,7 +215,7 @@ const CDN_BASE = 'https://cdn.buildyourinnervoice.com';
 // ---------------------------------------------------------------------------
 const MIX_LEVELS = {
   'None (Subliminal only)': { voice: '-60dB', bg: '0dB'   },
-  'A little (Whispered)':   { voice: '-15dB', bg: '-26dB' },  // -9 was still too loud for a whisper (owner listen-test 19 Jul); -12 approved
+  'A little (Whispered)':   { voice: '-15dB', bg: '-26dB' },  // 4 Aug 2026, measured: -18/-16 put the voice 2dB UNDER the bed, swing 2.7dB. Now -15/-26, swing 10.1dB on rain, checked on all 7 beds. History: -18 original, -9 too loud, -12 approved 19 Jul but never applied.
   'Fully (Clear voice)':    { voice: '0dB',   bg: '-16dB' }
 };
 // ---- Subliminal loudness (22 Jul 2026, handover) ---------------------------
