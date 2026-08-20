@@ -523,14 +523,20 @@ app.post('/mix', async (req, res) => {
   const soundLabel = /pink-noise/i.test(background) ? "Pink-Noise" : /white-noise/i.test(background) ? "White-Noise" : slugName(background);
   const remoteFilename = `mixed/BYIV-${soundLabel}-${slugName(req.body.focus)}-${Date.now().toString(36)}.mp3`;
   const downloadUrl = `${CDN_BASE}/${remoteFilename}`;
-  // Fields echoed back to the Make "Track Ready" webhook.
+    // Fields echoed back to the Make "Track Ready" webhook.
+  // NOTE (20 Aug 2026): gift_message was missing from this passthrough, so the
+  // buyer's personal gift message never reached the delivery email. Added below.
+  // If this still doesn't show up in the callback, check that whatever calls
+  // this /mix endpoint (in Make) is actually sending gift_message in the
+  // request body — this line can only echo what it receives.
   const passthrough = {
     respondent_id,
     email: req.body.email || '',
     focus: req.body.focus || '',
     duration_label: req.body.duration_label || duration || '',
     affirmations: req.body.affirmations || '',
-    risk: req.body.risk || ''
+    risk: req.body.risk || '',
+    gift_message: req.body.gift_message || ''
   };
   if (req.body.gift_date) passthrough.gift_date = req.body.gift_date; // omit when empty: delivery filter relies on absence
   function postCallback(payload) {
