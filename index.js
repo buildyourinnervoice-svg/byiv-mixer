@@ -415,7 +415,8 @@ async function makeSeamlessLoop(inPath, outPath) {
     }
   }
 }
-  const stat = fs.statSync(localPath);
+function uploadToBunny(localPath, remotePath) {
+const stat = fs.statSync(localPath);
   return new Promise((resolve, reject) => {
     const options = {
       hostname: BUNNY_STORAGE_URL,
