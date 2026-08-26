@@ -382,23 +382,6 @@ async function makeSeamlessLoop(inPath, outPath) {
   const midPath  = path.join(dir, 'seamless-mid.wav');
   const tailPath = path.join(dir, 'seamless-tail.wav');
   const seamPath = path.join(dir, 'seamless-seam.wav');
-  // ---- WHY THIS IS THREE PASSES, NOT ONE FILTER_COMPLEX (26 Aug 2026) -------
-  // The previous single-pass version (asplit=3 -> three atrim branches ->
-  // acrossfade -> concat, all in one -filter_complex) silently produced ZERO
-  // frames from acrossfade. ffmpeg's scheduler can't keep the short `head`
-  // branch's buffered frames alive long enough to overlap with `tail`, whose
-  // atrim doesn't start emitting until ffmpeg has read almost the entire
-  // source file (tail starts near the file's end). No error, no non-zero
-  // exit code — just "No filtered frames for output stream", and concat then
-  // passed `mid` straight through with an empty seam. The size>10000 check
-  // below still passed (mid alone is well over 10KB), so this looked like a
-  // working seamless loop and was silently used — reproducing the exact
-  // click bug this function exists to remove, just ~2*CF seconds earlier in
-  // the loop period than the untreated file. THIS IS THE ~2:33 / ~2:45
-  // FOREST-BINAURAL GLITCH. Verified by reproducing it with a synthetic file
-  // and confirming acrossfade emits nothing in the combined graph, then
-  // confirming a three-pass version (each stage a separate ffmpeg process,
-  // materialised to disk) crossfades correctly every time.
   try {
     await runFfmpeg(['-i', inPath, '-af', `atrim=start=0:end=${cf},asetpts=PTS-STARTPTS`,
       '-c:a', 'pcm_s16le', headPath, '-y']);
@@ -407,8 +390,31 @@ async function makeSeamlessLoop(inPath, outPath) {
     await runFfmpeg(['-i', inPath, '-af', `atrim=start=${tailStart}:end=${L.toFixed(3)},asetpts=PTS-STARTPTS`,
       '-c:a', 'pcm_s16le', tailPath, '-y']);
     await runFfmpeg(['-i', tailPath, '-i', headPath, '-filter_complex',
-      `[0:a][1:a]acrossfade=d=${cf}:c1=qsin:c2=qsin[seam]`, '-map',
-function uploadToBunny(localPath, remotePath) {
+      `[0:a][1:a]acrossfade=d=${cf}:c1=qsin:c2=qsin[seam]`, '-map', '[seam]',
+      '-c:a', 'pcm_s16le', seamPath, '-y']);
+    const seamDuration = await ffprobeDuration(seamPath);
+    if (!seamDuration || seamDuration < CF * 0.9) {
+      console.error(`makeSeamlessLoop: seam came back empty/short (${seamDuration}s, expected ~${cf}s), using raw loop`);
+      return false;
+    }
+    await runFfmpeg(['-i', seamPath, '-i', midPath, '-filter_complex',
+      '[0:a][1:a]concat=n=2:v=0:a=1[out]', '-map', '[out]',
+      '-c:a', 'libmp3lame', '-b:a', '192k', outPath, '-y']);
+    const expectedDuration = L - CF;
+    const outDuration = await ffprobeDuration(outPath);
+    const ok = fs.statSync(outPath).size > 10000 &&
+      outDuration > expectedDuration * 0.9 && outDuration < expectedDuration * 1.1;
+    if (!ok) console.error(`makeSeamlessLoop: output duration ${outDuration}s off from expected ${expectedDuration}s, using raw loop`);
+    return ok;
+  } catch (e) {
+    console.error('makeSeamlessLoop failed, will use raw loop:', e.message);
+    return false;
+  } finally {
+    for (const f of [headPath, midPath, tailPath, seamPath]) {
+      try { fs.unlinkSync(f); } catch (_) {}
+    }
+  }
+}
   const stat = fs.statSync(localPath);
   return new Promise((resolve, reject) => {
     const options = {
