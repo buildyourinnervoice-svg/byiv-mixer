@@ -763,12 +763,17 @@ app.get('/preview', async (req, res) => {
       inputArgs = ['-f', 'lavfi', '-i',
         `anoisesrc=colour=${colour}:sample_rate=44100:amplitude=0.35:seed=1,aformat=channel_layouts=mono`];
     } else {
-      if (!/^https:\/\//i.test(sound)) return res.status(400).send('sound must be white, pink, or an https mp3 URL');
-      const bgTmp = `/tmp/preview-bg-${Date.now()}.mp3`;
+          const bgTmp = `/tmp/preview-bg-${Date.now()}.mp3`;
       await downloadFile(sound, bgTmp);
       tmpFiles.push(bgTmp);
-      inputArgs = ['-stream_loop', '-1', '-i', bgTmp];
-    }
+      let loopInput = bgTmp;
+      try {
+        const seamlessTmp = `/tmp/preview-bg-seamless-${Date.now()}.mp3`;
+        if (await makeSeamlessLoop(bgTmp, seamlessTmp)) { loopInput = seamlessTmp; tmpFiles.push(seamlessTmp); }
+      } catch (e) {
+        console.error('Preview seamless pre-process errored, using raw loop:', e.message);
+      }
+      inputArgs = ['-stream_loop', '-1', '-i', loopInput];
     // Same background conditioning as /mix: loudnorm -> tier offset -> light compressor.
     const bgLabel = (colour ? '[0:a]pan=stereo|c0=c0|c1=c0[bg0];' : '[0:a]anull[bg0];') +
       `[bg0]loudnorm=I=-23:TP=-2:LRA=11[bgn];` +
