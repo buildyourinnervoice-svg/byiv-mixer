@@ -774,6 +774,7 @@ app.get('/preview', async (req, res) => {
         console.error('Preview seamless pre-process errored, using raw loop:', e.message);
       }
       inputArgs = ['-stream_loop', '-1', '-i', loopInput];
+      }
     // Same background conditioning as /mix: loudnorm -> tier offset -> light compressor.
     const bgLabel = (colour ? '[0:a]pan=stereo|c0=c0|c1=c0[bg0];' : '[0:a]anull[bg0];') +
       `[bg0]loudnorm=I=-23:TP=-2:LRA=11[bgn];` +
