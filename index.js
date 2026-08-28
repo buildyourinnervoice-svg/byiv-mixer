@@ -811,6 +811,48 @@ const PREVIEW_TIERS = {
   whispered: 'A little (Whispered)',
   full: 'Fully (Clear voice)'
 };
+// ---- Seamless-preview cache (added 28 Aug 2026) -----------------------------
+// makeSeamlessLoop() is a genuinely expensive 3-pass ffmpeg operation. Before
+// this, /preview ran it fresh on every single click, for every visitor, even
+// though the 7 background sounds never change — that's the real cause of the
+// preview slowness/dropouts reported today. The actual audio is identical
+// every time for a given background, so we cache the processed result on
+// Bunny (same storage already used for promo codes) and only ever do the
+// expensive crossfade once per background, ever.
+function cacheKeyFor(soundUrl) {
+  const base = String(soundUrl).split('/').pop().replace(/\.mp3$/i, '') || 'unknown';
+  return base.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
+}
+function getCachedSeamless(key) {
+  return new Promise((resolve) => {
+    const r = https.request({
+      hostname: BUNNY_STORAGE_URL,
+      path: `/${BUNNY_STORAGE_ZONE}/preview-cache/${key}.mp3`,
+      method: 'GET',
+      headers: { 'AccessKey': BUNNY_API_KEY }
+    }, (resp) => {
+      if (resp.statusCode !== 200) { resp.resume(); return resolve(null); }
+      const chunks = [];
+      resp.on('data', (c) => chunks.push(c));
+      resp.on('end', () => resolve(Buffer.concat(chunks)));
+    });
+    r.on('error', () => resolve(null));
+    r.end();
+  });
+}
+function saveCachedSeamless(key, buffer) {
+  return new Promise((resolve) => {
+    const r = https.request({
+      hostname: BUNNY_STORAGE_URL,
+      path: `/${BUNNY_STORAGE_ZONE}/preview-cache/${key}.mp3`,
+      method: 'PUT',
+      headers: { 'AccessKey': BUNNY_API_KEY, 'Content-Type': 'audio/mpeg', 'Content-Length': buffer.length }
+    }, (resp) => { resp.resume(); resp.on('end', () => resolve()); });
+    r.on('error', () => resolve());
+    r.write(buffer);
+    r.end();
+  });
+}
 app.get('/preview', async (req, res) => {
   try {
     const sound = String(req.query.sound || '').trim();
@@ -834,14 +876,29 @@ app.get('/preview', async (req, res) => {
         `anoisesrc=colour=${colour}:sample_rate=44100:amplitude=0.35:seed=1,aformat=channel_layouts=mono`];
     } else {
           const bgTmp = `/tmp/preview-bg-${Date.now()}.mp3`;
-      await downloadFile(sound, bgTmp);
-      tmpFiles.push(bgTmp);
       let loopInput = bgTmp;
-      try {
-        const seamlessTmp = `/tmp/preview-bg-seamless-${Date.now()}.mp3`;
-        if (await makeSeamlessLoop(bgTmp, seamlessTmp)) { loopInput = seamlessTmp; tmpFiles.push(seamlessTmp); }
-      } catch (e) {
-        console.error('Preview seamless pre-process errored, using raw loop:', e.message);
+      const cacheKey = cacheKeyFor(sound);
+      const cached = await getCachedSeamless(cacheKey);
+      if (cached) {
+        // Already processed before — write straight to disk, skip ffmpeg entirely.
+        fs.writeFileSync(bgTmp, cached);
+        tmpFiles.push(bgTmp);
+      } else {
+        await downloadFile(sound, bgTmp);
+        tmpFiles.push(bgTmp);
+        try {
+          const seamlessTmp = `/tmp/preview-bg-seamless-${Date.now()}.mp3`;
+          if (await makeSeamlessLoop(bgTmp, seamlessTmp)) {
+            loopInput = seamlessTmp;
+            tmpFiles.push(seamlessTmp);
+            // Save for next time — don't make this request wait on the upload.
+            fs.readFile(seamlessTmp, (err, buf) => {
+              if (!err) saveCachedSeamless(cacheKey, buf).catch(() => {});
+            });
+          }
+        } catch (e) {
+          console.error('Preview seamless pre-process errored, using raw loop:', e.message);
+        }
       }
       inputArgs = ['-stream_loop', '-1', '-i', loopInput];
       }
