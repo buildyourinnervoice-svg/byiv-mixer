@@ -297,6 +297,64 @@ function savePromoUses(uses) {
     r.end();
   });
 }
+// ---- General-purpose codes (added 28 Aug 2026): any code -> one free track,
+// any length, redeemable once per email. Stored as a dict on Bunny storage so
+// new codes can be added just by editing that one JSON file — no redeploy.
+// Shape: { "CODE": { "max": 1, "uses": [ { "email": "...", "at": "..." } ] } }
+const CODES_FILE = 'promo-codes.json';
+function getPromoCodes() {
+  return new Promise((resolve) => {
+    const r = https.request({
+      hostname: BUNNY_STORAGE_URL,
+      path: `/${BUNNY_STORAGE_ZONE}/${CODES_FILE}`,
+      method: 'GET',
+      headers: { 'AccessKey': BUNNY_API_KEY }
+    }, (resp) => {
+      let body = '';
+      resp.on('data', (c) => body += c);
+      resp.on('end', () => {
+        if (resp.statusCode !== 200) return resolve({});
+        try { const j = JSON.parse(body); resolve(j && typeof j === 'object' ? j : {}); }
+        catch (e) { resolve({}); }
+      });
+    });
+    r.on('error', () => resolve({}));
+    r.end();
+  });
+}
+function savePromoCodes(codes) {
+  return new Promise((resolve, reject) => {
+    const body = Buffer.from(JSON.stringify(codes, null, 2));
+    const r = https.request({
+      hostname: BUNNY_STORAGE_URL,
+      path: `/${BUNNY_STORAGE_ZONE}/${CODES_FILE}`,
+      method: 'PUT',
+      headers: { 'AccessKey': BUNNY_API_KEY, 'Content-Type': 'application/json', 'Content-Length': body.length }
+    }, (resp) => { resp.resume(); resp.on('end', () => (resp.statusCode < 300 ? resolve() : reject(new Error('Codes save failed: ' + resp.statusCode)))); });
+    r.on('error', reject);
+    r.write(body);
+    r.end();
+  });
+}
+// ---- Admin: add a gift code (added 28 Aug 2026) ----------------------------
+// Lets Make (or anything else that knows the admin secret) add a new code
+// without ever touching Bunny directly — the Bunny key stays on Railway only,
+// matching how this account has handled that key since the 4 Aug rotation.
+// Set ADMIN_SECRET as a new Railway environment variable (any long random
+// string you choose) before using this endpoint.
+const ADMIN_SECRET = process.env.ADMIN_SECRET || '';
+app.post('/admin/add-code', express.json(), async (req, res) => {
+  if (!ADMIN_SECRET) return res.status(503).json({ error: 'ADMIN_SECRET not set on Railway yet.' });
+  if (req.get('X-Admin-Secret') !== ADMIN_SECRET) return res.status(401).json({ error: 'Not authorised.' });
+  const code = String((req.body || {}).code || '').trim().toUpperCase();
+  const max = Number.isFinite(Number((req.body || {}).max)) ? Number((req.body || {}).max) : 1;
+  if (!code) return res.status(400).json({ error: 'code is required.' });
+  const codes = await getPromoCodes();
+  if (codes[code]) return res.status(409).json({ error: 'That code already exists.', code });
+  codes[code] = { max, uses: [] };
+  await savePromoCodes(codes);
+  res.json({ ok: true, code, max });
+});
 function postJson(url, data) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify(data);
@@ -449,17 +507,29 @@ app.post('/create-checkout', async (req, res) => {
     // ---- LAUNCH22 promo (added 17 Jul 2026): one free track of any length,
     // capped at 10 unique redemptions, ledger on Bunny storage. Same email
     // re-using the code doesn't burn an extra slot.
+    // ---- General codes (added 28 Aug 2026): any code in promo-codes.json on
+    // Bunny storage -> one free track of any length, once per email. Add new
+    // codes anytime by editing that file — no code change or redeploy needed.
     let finalPrice = price;
     const promo = String(o.promo_code || '').trim().toUpperCase();
     if (promo) {
-      if (promo !== 'LAUNCH22') return res.status(400).json({ error: "That code isn't recognised — please check it and try again." });
       const pEmail = String(o.email || '').trim();
       if (!pEmail) return res.status(400).json({ error: 'Please add your email so we can send your free track.' });
-      const uses = await promoUses();
-      const already = uses.some(u => String(u.email || '').toLowerCase() === pEmail.toLowerCase());
-      if (!already && uses.length >= 12) return res.status(403).json({ error: 'This code has now been fully redeemed.' });
-      if (!already) { uses.push({ email: pEmail, at: new Date().toISOString() }); await savePromoUses(uses); }
-      finalPrice = 0;
+      if (promo === 'LAUNCH22') {
+        const uses = await promoUses();
+        const already = uses.some(u => String(u.email || '').toLowerCase() === pEmail.toLowerCase());
+        if (!already && uses.length >= 12) return res.status(403).json({ error: 'This code has now been fully redeemed.' });
+        if (!already) { uses.push({ email: pEmail, at: new Date().toISOString() }); await savePromoUses(uses); }
+        finalPrice = 0;
+      } else {
+        const codes = await getPromoCodes();
+        const entry = codes[promo];
+        if (!entry) return res.status(400).json({ error: "That code isn't recognised — please check it and try again." });
+        const already = entry.uses.some(u => String(u.email || '').toLowerCase() === pEmail.toLowerCase());
+        if (!already && entry.uses.length >= entry.max) return res.status(403).json({ error: 'This code has now been fully redeemed.' });
+        if (!already) { entry.uses.push({ email: pEmail, at: new Date().toISOString() }); await savePromoCodes(codes); }
+        finalPrice = 0;
+      }
     }
     // FREE path (member own track <=60 min, or a future promo code): no Stripe.
     // We need an email here since there's no Stripe page to collect one.
