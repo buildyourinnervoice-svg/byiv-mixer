@@ -695,6 +695,14 @@ app.post('/mix', async (req, res) => {
       //    dB under the voice and flows back naturally.
       const noiseColour = /pink-noise/i.test(background) ? 'pink'
                         : /white-noise/i.test(background) ? 'white' : null;
+      // ---- FADE-OUT (added 28 Aug 2026, customer feedback) -----------------
+      // Tracks were ending abruptly, mid-affirmation, right at the cutoff.
+      // The last few seconds of the whole mix (voice + background together)
+      // now fade smoothly to silence instead. 6s feels gentle without being
+      // long enough to eat into a real affirmation on the shortest (5 minute)
+      // tracks.
+      const fadeSecs = 6;
+      const fadeStart = Math.max(0, durationSecs - fadeSecs);
       const filterChain =
         `[bg0]loudnorm=I=-23:TP=-2:LRA=11[bgn];` +
         `[bgn]volume=${levels.bg}[bgv];` +
@@ -704,7 +712,8 @@ app.post('/mix', async (req, res) => {
         `[voiceloop]asplit=2[voicemix][voicekey];` +
         `[bgc][voicekey]sidechaincompress=threshold=${duckThresh}:ratio=2.5:attack=20:release=250[bgducked];` +
         `[bgducked][voicemix]amix=inputs=2:duration=first:normalize=0[mix];` +
-        `[mix]alimiter=limit=0.95[out]`;
+        `[mix]alimiter=limit=0.95[limited];` +
+        `[limited]afade=t=out:st=${fadeStart}:d=${fadeSecs}[out]`;
       let ffArgs;
       if (noiseColour) {
         ffArgs = [
