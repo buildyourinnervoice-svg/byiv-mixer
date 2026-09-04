@@ -33,7 +33,7 @@ const PRICE = {
   '10 min': 9,
   '30 min': 13,
   '60 min': 16,
-  '4 hours': 25
+   '4 hours': 20   // SLEEPtember. Put back to 25 when the offer ends.
 };
 // The wizard says "5 min" but the pipeline/mixer expect "5 minutes".
 const DURATION_NORMALISE = {
