@@ -958,6 +958,340 @@ app.get('/preview', async (req, res) => {
     res.status(500).send('Preview failed: ' + err.message);
   }
 });
+// ===========================================================================
+// 5-MINUTE RESETS — audio generation. Added 7 September 2026.
+//
+// Two new routes, both purely additive. Nothing above or below them changes,
+// and they use the helpers already in this file (downloadFile, runFfmpeg,
+// ffprobeDuration, uploadToBunny, CDN_BASE).
+//
+//   POST /reset-audio    the one you will actually use. Give it the script,
+//                        it speaks every line, joins them with real silence,
+//                        uploads the finished mp3 and hands back the URL.
+//
+//   POST /concatenate    the lower level one. Give it clips and gaps, it
+//                        joins them. /reset-audio is built on this, and it is
+//                        here on its own in case you ever want to join audio
+//                        you already have.
+//
+// WHY THIS EXISTS
+// The Reset scripts need pauses of 9 to 15 seconds. ElevenLabs break tags cap
+// at 3 seconds each, so we were chaining them, and chaining them makes the
+// voice drift — it came out American once and sped up another time. Even a
+// single break tag changed the voice character either side of the pause.
+//
+// So there are no break tags here at all. Each line is spoken on its own, and
+// the silence between lines is real silence. previous_text and next_text are
+// passed on every call so ElevenLabs keeps the same delivery across the joins.
+//
+// NEEDS ONE NEW RAILWAY VARIABLE:  ELEVENLABS_API_KEY
+// (Railway stages variable edits — remember to press Deploy afterwards.)
+// ===========================================================================
+
+const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || '';
+
+const RESET_DEFAULTS = {
+  voice_id: 'pFZP5JQG7iQjIQuC4Bku',      // Lily. Chosen by ear, do not swap on documentation.
+  model_id: 'eleven_multilingual_v2',     // v3 does not take these settings
+  voice_settings: {
+    stability: 0.85,
+    similarity_boost: 0.75,
+    style: 0,
+    use_speaker_boost: false,
+    speed: 0.9
+  }
+};
+
+const CONCAT_MAX_PARTS = 200;
+const CONCAT_MAX_SILENCE = 60;          // seconds, per gap
+const CONCAT_MAX_TOTAL_SECS = 3600;
+
+// ---------------------------------------------------------------------------
+// Shared: join a list of clips and silences into one mp3.
+// parts: [{ file: "/tmp/..." } | { silence: seconds }]
+// ---------------------------------------------------------------------------
+async function joinParts(parts, outputPath) {
+  const inputArgs = [];
+  const filterBits = [];
+  let n = 0;
+
+  for (const p of parts) {
+    if (p.silence !== undefined && p.silence !== null) {
+      inputArgs.push('-f', 'lavfi', '-t', String(Number(p.silence)),
+        '-i', 'anullsrc=r=44100:cl=stereo');
+    } else {
+      inputArgs.push('-i', p.file);
+    }
+    // every input forced to one format, or concat refuses to join generated
+    // silence to a decoded mp3
+    filterBits.push(`[${n}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[a${n}]`);
+    n++;
+  }
+
+  const labels = Array.from({ length: n }, (_, i) => `[a${i}]`).join('');
+  const filterComplex = filterBits.join(';') + ';' +
+    `${labels}concat=n=${n}:v=0:a=1[joined];` +
+    `[joined]alimiter=limit=0.95[out]`;
+
+  await runFfmpeg([
+    ...inputArgs,
+    '-filter_complex', filterComplex,
+    '-map', '[out]',
+    '-c:a', 'libmp3lame', '-b:a', '192k',
+    outputPath, '-y'
+  ]);
+
+  const secs = await ffprobeDuration(outputPath);
+  const size = fs.statSync(outputPath).size;
+  if (!secs || secs < 1 || size < 5000) {
+    throw new Error(`Joined file looks wrong: ${secs}s, ${size} bytes`);
+  }
+  return secs;
+}
+
+function resetRemoteName(name, fallback) {
+  const base = String(name || fallback)
+    .replace(/\.mp3$/i, '')
+    .replace(/[^a-zA-Z0-9/_-]+/g, '-')
+    .replace(/^\/+|\/+$/g, '') || fallback;
+  return `${base}-${Date.now().toString(36)}.mp3`;
+}
+
+// ---------------------------------------------------------------------------
+// One ElevenLabs call. Returns an mp3 Buffer.
+// output_format is pinned to 44.1kHz 192kbps so every clip already matches
+// what we join and export at, and nothing gets resampled twice.
+// ---------------------------------------------------------------------------
+function speakLine(opts) {
+  return new Promise((resolve, reject) => {
+    const payload = {
+      text: opts.text,
+      model_id: opts.model_id,
+      voice_settings: opts.voice_settings
+    };
+    // These are the whole point. They tell the model what came before and
+    // after, so the delivery does not restart from scratch on every line.
+    if (opts.previous_text) payload.previous_text = opts.previous_text;
+    if (opts.next_text) payload.next_text = opts.next_text;
+
+    const body = Buffer.from(JSON.stringify(payload));
+    const req = https.request({
+      hostname: 'api.elevenlabs.io',
+      path: `/v1/text-to-speech/${encodeURIComponent(opts.voice_id)}?output_format=mp3_44100_192`,
+      method: 'POST',
+      headers: {
+        'xi-api-key': ELEVENLABS_API_KEY,
+        'Content-Type': 'application/json',
+        'Accept': 'audio/mpeg',
+        'Content-Length': body.length
+      }
+    }, (resp) => {
+      const chunks = [];
+      resp.on('data', (c) => chunks.push(c));
+      resp.on('end', () => {
+        const buf = Buffer.concat(chunks);
+        if (resp.statusCode !== 200) {
+          return reject(new Error(`ElevenLabs ${resp.statusCode}: ${buf.toString('utf8').slice(0, 300)}`));
+        }
+        if (buf.length < 500) {
+          return reject(new Error(`ElevenLabs returned only ${buf.length} bytes`));
+        }
+        resolve(buf);
+      });
+    });
+    req.on('error', reject);
+    req.setTimeout(120000, () => { req.destroy(new Error('ElevenLabs timed out after 2 minutes')); });
+    req.write(body);
+    req.end();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// POST /reset-audio
+//
+// {
+//   "name": "resets/overwhelmed",
+//   "lines": [
+//     { "text": "Hello, and welcome to this 5-Minute Reset.", "gap": 1 },
+//     { "text": "This is completely private.", "gap": 9 }
+//   ]
+// }
+//
+// gap is the silence in seconds AFTER that line. Leave it off or use 0 for none.
+// voice_id, model_id and voice_settings are optional and default to Lily at
+// the settings already signed off.
+//
+// -> { "success": true, "download_url": "...", "seconds": 412.6, "lines": 37 }
+// ---------------------------------------------------------------------------
+app.post('/reset-audio', async (req, res) => {
+  const body = req.body || {};
+  const lines = Array.isArray(body.lines) ? body.lines : null;
+
+  if (!ELEVENLABS_API_KEY) {
+    return res.status(503).json({ success: false, error: 'ELEVENLABS_API_KEY is not set on Railway yet.' });
+  }
+  if (!lines || !lines.length) {
+    return res.status(400).json({ success: false, error: 'lines must be a non-empty array' });
+  }
+  if (lines.length > 100) {
+    return res.status(400).json({ success: false, error: `Too many lines (${lines.length}), max 100` });
+  }
+
+  // validate the whole script before spending a single ElevenLabs credit
+  let totalGap = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const t = lines[i] && lines[i].text;
+    if (typeof t !== 'string' || !t.trim()) {
+      return res.status(400).json({ success: false, error: `Line ${i + 1} has no text` });
+    }
+    if (t.length > 800) {
+      return res.status(400).json({ success: false, error: `Line ${i + 1} is ${t.length} characters. Keep lines short, that is the point.` });
+    }
+    if (/<break/i.test(t)) {
+      return res.status(400).json({ success: false, error: `Line ${i + 1} contains a break tag. Use "gap" instead — break tags are what broke the voice.` });
+    }
+    const g = lines[i].gap;
+    if (g !== undefined && g !== null) {
+      const secs = Number(g);
+      if (!isFinite(secs) || secs < 0 || secs > CONCAT_MAX_SILENCE) {
+        return res.status(400).json({ success: false, error: `Line ${i + 1}: gap must be between 0 and ${CONCAT_MAX_SILENCE} seconds` });
+      }
+      totalGap += secs;
+    }
+  }
+  if (totalGap > CONCAT_MAX_TOTAL_SECS) {
+    return res.status(400).json({ success: false, error: 'Total silence is longer than an hour' });
+  }
+
+  const voice_id = body.voice_id || RESET_DEFAULTS.voice_id;
+  const model_id = body.model_id || RESET_DEFAULTS.model_id;
+  const voice_settings = Object.assign({}, RESET_DEFAULTS.voice_settings, body.voice_settings || {});
+
+  const tmpDir = `/tmp/reset-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  fs.mkdirSync(tmpDir, { recursive: true });
+  const outputPath = path.join(tmpDir, 'reset.mp3');
+
+  try {
+    const parts = [];
+    for (let i = 0; i < lines.length; i++) {
+      const text = String(lines[i].text).trim();
+      const opts = {
+        text, voice_id, model_id, voice_settings,
+        previous_text: i > 0 ? String(lines[i - 1].text).trim() : '',
+        next_text: i < lines.length - 1 ? String(lines[i + 1].text).trim() : ''
+      };
+
+      // one retry, because a single dropped call should not cost the whole script
+      let buf = null, lastErr = null;
+      for (let attempt = 1; attempt <= 2 && !buf; attempt++) {
+        try { buf = await speakLine(opts); }
+        catch (e) { lastErr = e; console.error(`Line ${i + 1} attempt ${attempt} failed:`, e.message); }
+      }
+      if (!buf) throw lastErr;
+
+      const clipPath = path.join(tmpDir, `line-${String(i).padStart(3, '0')}.mp3`);
+      fs.writeFileSync(clipPath, buf);
+      parts.push({ file: clipPath });
+
+      const gap = Number(lines[i].gap || 0);
+      if (gap > 0) parts.push({ silence: gap });
+      console.log(`Reset line ${i + 1}/${lines.length} spoken (${buf.length} bytes, gap ${gap}s)`);
+    }
+
+    const secs = await joinParts(parts, outputPath);
+    const remoteFilename = resetRemoteName(body.name, 'resets/reset');
+    await uploadToBunny(outputPath, remoteFilename);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+
+    console.log('Reset audio complete:', remoteFilename, `${Math.round(secs)}s`);
+    res.json({
+      success: true,
+      download_url: `${CDN_BASE}/${remoteFilename}`,
+      seconds: Math.round(secs * 10) / 10,
+      lines: lines.length
+    });
+  } catch (err) {
+    console.error('RESET AUDIO ERROR:', err.message);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /concatenate
+// { "name": "resets/x", "parts": [{ "url": "https://..." }, { "silence": 9 }] }
+// ---------------------------------------------------------------------------
+app.post('/concatenate', async (req, res) => {
+  const body = req.body || {};
+  const parts = Array.isArray(body.parts) ? body.parts : null;
+
+  if (!parts || !parts.length) {
+    return res.status(400).json({ success: false, error: 'parts must be a non-empty array' });
+  }
+  if (parts.length > CONCAT_MAX_PARTS) {
+    return res.status(400).json({ success: false, error: `Too many parts (${parts.length}), max ${CONCAT_MAX_PARTS}` });
+  }
+
+  let plannedSilence = 0;
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i] || {};
+    const hasUrl = typeof p.url === 'string' && /^https:\/\//i.test(p.url);
+    const hasSilence = p.silence !== undefined && p.silence !== null;
+    if (!hasUrl && !hasSilence) {
+      return res.status(400).json({ success: false, error: `Part ${i + 1} has neither a url nor a silence` });
+    }
+    if (hasUrl && hasSilence) {
+      return res.status(400).json({ success: false, error: `Part ${i + 1} has both a url and a silence — use two separate parts` });
+    }
+    if (hasSilence) {
+      const secs = Number(p.silence);
+      if (!isFinite(secs) || secs <= 0 || secs > CONCAT_MAX_SILENCE) {
+        return res.status(400).json({ success: false, error: `Part ${i + 1}: silence must be between 0 and ${CONCAT_MAX_SILENCE} seconds` });
+      }
+      plannedSilence += secs;
+    }
+  }
+  if (plannedSilence > CONCAT_MAX_TOTAL_SECS) {
+    return res.status(400).json({ success: false, error: 'Total silence is longer than an hour' });
+  }
+
+  const tmpDir = `/tmp/concat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  fs.mkdirSync(tmpDir, { recursive: true });
+  const outputPath = path.join(tmpDir, 'joined.mp3');
+
+  try {
+    const built = [];
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i];
+      if (p.silence !== undefined && p.silence !== null) {
+        built.push({ silence: Number(p.silence) });
+      } else {
+        const clipPath = path.join(tmpDir, `part-${String(i).padStart(3, '0')}.mp3`);
+        await downloadFile(p.url, clipPath);
+        const size = fs.statSync(clipPath).size;
+        if (size < 500) throw new Error(`Part ${i + 1} downloaded only ${size} bytes from ${p.url}`);
+        built.push({ file: clipPath });
+      }
+    }
+
+    const secs = await joinParts(built, outputPath);
+    const remoteFilename = resetRemoteName(body.name, 'resets/joined');
+    await uploadToBunny(outputPath, remoteFilename);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+
+    console.log('Concatenate complete:', remoteFilename, `${Math.round(secs)}s`);
+    res.json({
+      success: true,
+      download_url: `${CDN_BASE}/${remoteFilename}`,
+      seconds: Math.round(secs * 10) / 10,
+      parts: parts.length
+    });
+  } catch (err) {
+    console.error('CONCATENATE ERROR:', err.message);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 app.get('/health', (req, res) => res.json({ status: 'ok', stripe: !!stripe }));
 const server = app.listen(3000, () => console.log('BYIV Mixer + Checkout running on port 3000'));
 server.requestTimeout = 0;
