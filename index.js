@@ -1019,12 +1019,19 @@ async function joinParts(parts, outputPath) {
     if (p.silence !== undefined && p.silence !== null) {
       inputArgs.push('-f', 'lavfi', '-t', String(Number(p.silence)),
         '-i', 'anullsrc=r=44100:cl=stereo');
+      // silence needs nothing but the format match
+      filterBits.push(`[${n}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[a${n}]`);
     } else {
       inputArgs.push('-i', p.file);
+      // A hard cut where a clip meets silence is what clicks. Ten milliseconds
+      // in and thirty out is inaudible on speech and takes the click away.
+      // Added 7 September 2026 after a glitch was heard at the join.
+      const dur = p.seconds || await ffprobeDuration(p.file);
+      const fadeOutAt = Math.max(0, dur - 0.03).toFixed(3);
+      filterBits.push(
+        `[${n}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,` +
+        `afade=t=in:st=0:d=0.01,afade=t=out:st=${fadeOutAt}:d=0.03[a${n}]`);
     }
-    // every input forced to one format, or concat refuses to join generated
-    // silence to a decoded mp3
-    filterBits.push(`[${n}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[a${n}]`);
     n++;
   }
 
@@ -1173,6 +1180,10 @@ app.post('/reset-audio', async (req, res) => {
 
   try {
     const parts = [];
+    // Starting the instant you press play sounds abrupt. A short lead in fixes
+    // it. Set "lead_in": 0 to turn it off.
+    const leadIn = body.lead_in === undefined ? 0.9 : Number(body.lead_in);
+    if (isFinite(leadIn) && leadIn > 0) parts.push({ silence: Math.min(leadIn, 10) });
     for (let i = 0; i < lines.length; i++) {
       const text = String(lines[i].text).trim();
       const opts = {
@@ -1191,7 +1202,7 @@ app.post('/reset-audio', async (req, res) => {
 
       const clipPath = path.join(tmpDir, `line-${String(i).padStart(3, '0')}.mp3`);
       fs.writeFileSync(clipPath, buf);
-      parts.push({ file: clipPath });
+      parts.push({ file: clipPath, seconds: await ffprobeDuration(clipPath) });
 
       const gap = Number(lines[i].gap || 0);
       if (gap > 0) parts.push({ silence: gap });
