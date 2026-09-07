@@ -1110,8 +1110,16 @@ function speakLine(opts) {
       model_id: opts.model_id,
       voice_settings: opts.voice_settings
     };
-    // These are the whole point. They tell the model what came before and
-    // after, so the delivery does not restart from scratch on every line.
+    // ---- 7 September 2026. next_text is OFF by default, and here is why. ----
+    // These two are documented as context only: they are supposed to steer the
+    // delivery without being spoken. In practice next_text bleeds. A test of
+    // "One. Two. Three. Four." came back as "One...two", "Two...th",
+    // "Three...f" — every clip carrying the start of the next line. That is
+    // the noise that was being heard at the joins, and it was never an audio
+    // fault at all.
+    // previous_text is kept because it does the continuity work and does not
+    // bleed the same way. Set "continuity" to "none" to switch it off too, or
+    // to "both" to put next_text back if a future model behaves.
     if (opts.previous_text) payload.previous_text = opts.previous_text;
     if (opts.next_text) payload.next_text = opts.next_text;
 
@@ -1207,6 +1215,10 @@ app.post('/reset-audio', async (req, res) => {
   const voice_id = body.voice_id || RESET_DEFAULTS.voice_id;
   const model_id = body.model_id || RESET_DEFAULTS.model_id;
   const voice_settings = Object.assign({}, RESET_DEFAULTS.voice_settings, body.voice_settings || {});
+  // "previous" (default), "none", or "both". See the note in speakLine.
+  const continuity = String(body.continuity || 'previous').toLowerCase();
+  const usePrev = continuity === 'previous' || continuity === 'both';
+  const useNext = continuity === 'both';
 
   const tmpDir = `/tmp/reset-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   fs.mkdirSync(tmpDir, { recursive: true });
@@ -1222,8 +1234,8 @@ app.post('/reset-audio', async (req, res) => {
       const text = String(lines[i].text).trim();
       const opts = {
         text, voice_id, model_id, voice_settings,
-        previous_text: i > 0 ? String(lines[i - 1].text).trim() : '',
-        next_text: i < lines.length - 1 ? String(lines[i + 1].text).trim() : ''
+        previous_text: (usePrev && i > 0) ? String(lines[i - 1].text).trim() : '',
+        next_text: (useNext && i < lines.length - 1) ? String(lines[i + 1].text).trim() : ''
       };
 
       // one retry, because a single dropped call should not cost the whole script
