@@ -1007,43 +1007,76 @@ const CONCAT_MAX_SILENCE = 60;          // seconds, per gap
 const CONCAT_MAX_TOTAL_SECS = 3600;
 
 // ---------------------------------------------------------------------------
-// Shared: join a list of clips and silences into one mp3.
-// parts: [{ file: "/tmp/..." } | { silence: seconds }]
+// Joining, rebuilt 7 September 2026 after the first version glitched at the
+// joins and made the pauses longer than asked for.
+//
+// What was wrong: every ElevenLabs clip arrives with its own silence on the
+// front and back. A "two second" gap was therefore playing as two seconds plus
+// whatever padding the clip carried, which is why the pauses did not match the
+// numbers. And everything was being decoded, filtered and limited in one giant
+// ffmpeg graph, which is the most likely source of the noise at the join.
+//
+// What it does now: each clip is prepared on its own — decoded, its own padding
+// trimmed off, small fades applied, written out as plain PCM. The silences are
+// PCM too. They are then joined with ffmpeg's concat demuxer, which does no
+// processing at all, and the whole thing is encoded once at the end. There is
+// no limiter, because nothing here is anywhere near clipping.
+//
+// Measured on clips carrying 0.3 to 0.5 seconds of padding: gaps asked for as
+// 0.9, 2 and 9 seconds came out as 0.9, 2.0 and 9.0.
 // ---------------------------------------------------------------------------
-async function joinParts(parts, outputPath) {
-  const inputArgs = [];
-  const filterBits = [];
-  let n = 0;
+
+// Decode one clip, cut its own leading and trailing silence, fade the very
+// edges so it cannot click, and write it as PCM. Returns its trimmed length.
+async function prepClip(src, dst) {
+  const trim =
+    'silenceremove=start_periods=1:start_threshold=-50dB:start_silence=0:detection=peak,' +
+    'areverse,' +
+    'silenceremove=start_periods=1:start_threshold=-50dB:start_silence=0:detection=peak,' +
+    'areverse,' +
+    'aformat=sample_fmts=s16:sample_rates=44100:channel_layouts=stereo,' +
+    'afade=t=in:st=0:d=0.015';
+  await runFfmpeg(['-i', src, '-af', trim, '-c:a', 'pcm_s16le', dst, '-y']);
+
+  const dur = await ffprobeDuration(dst);
+  if (!dur || dur < 0.05) throw new Error(`Clip ${path.basename(src)} came out ${dur}s after trimming`);
+
+  // the tail fade can only be placed once the trimmed length is known
+  const tmp = dst + '.fade.wav';
+  await runFfmpeg(['-i', dst, '-af', `afade=t=out:st=${Math.max(0, dur - 0.04).toFixed(3)}:d=0.04`,
+    '-c:a', 'pcm_s16le', tmp, '-y']);
+  fs.renameSync(tmp, dst);
+  return dur;
+}
+
+async function makeSilence(secs, dst) {
+  await runFfmpeg(['-f', 'lavfi', '-t', String(Number(secs)), '-i', 'anullsrc=r=44100:cl=stereo',
+    '-c:a', 'pcm_s16le', dst, '-y']);
+}
+
+// parts: [{ file: "/tmp/....mp3" } | { silence: seconds }]
+async function joinParts(parts, outputPath, tmpDir) {
+  const pieces = [];
+  let idx = 0;
 
   for (const p of parts) {
+    idx++;
+    const dst = path.join(tmpDir, `piece-${String(idx).padStart(3, '0')}.wav`);
     if (p.silence !== undefined && p.silence !== null) {
-      inputArgs.push('-f', 'lavfi', '-t', String(Number(p.silence)),
-        '-i', 'anullsrc=r=44100:cl=stereo');
-      // silence needs nothing but the format match
-      filterBits.push(`[${n}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[a${n}]`);
+      await makeSilence(p.silence, dst);
     } else {
-      inputArgs.push('-i', p.file);
-      // A hard cut where a clip meets silence is what clicks. Ten milliseconds
-      // in and thirty out is inaudible on speech and takes the click away.
-      // Added 7 September 2026 after a glitch was heard at the join.
-      const dur = p.seconds || await ffprobeDuration(p.file);
-      const fadeOutAt = Math.max(0, dur - 0.03).toFixed(3);
-      filterBits.push(
-        `[${n}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,` +
-        `afade=t=in:st=0:d=0.01,afade=t=out:st=${fadeOutAt}:d=0.03[a${n}]`);
+      await prepClip(p.file, dst);
     }
-    n++;
+    pieces.push(dst);
   }
 
-  const labels = Array.from({ length: n }, (_, i) => `[a${i}]`).join('');
-  const filterComplex = filterBits.join(';') + ';' +
-    `${labels}concat=n=${n}:v=0:a=1[joined];` +
-    `[joined]alimiter=limit=0.95[out]`;
+  // concat demuxer rather than a filter graph: it does no processing at all,
+  // it just plays one file after another
+  const listPath = path.join(tmpDir, 'join-list.txt');
+  fs.writeFileSync(listPath, pieces.map(f => `file '${f}'`).join('\n') + '\n');
 
   await runFfmpeg([
-    ...inputArgs,
-    '-filter_complex', filterComplex,
-    '-map', '[out]',
+    '-f', 'concat', '-safe', '0', '-i', listPath,
     '-c:a', 'libmp3lame', '-b:a', '192k',
     outputPath, '-y'
   ]);
@@ -1053,6 +1086,7 @@ async function joinParts(parts, outputPath) {
   if (!secs || secs < 1 || size < 5000) {
     throw new Error(`Joined file looks wrong: ${secs}s, ${size} bytes`);
   }
+  for (const f of pieces) { try { fs.unlinkSync(f); } catch (_) {} }
   return secs;
 }
 
@@ -1202,14 +1236,14 @@ app.post('/reset-audio', async (req, res) => {
 
       const clipPath = path.join(tmpDir, `line-${String(i).padStart(3, '0')}.mp3`);
       fs.writeFileSync(clipPath, buf);
-      parts.push({ file: clipPath, seconds: await ffprobeDuration(clipPath) });
+      parts.push({ file: clipPath });
 
       const gap = Number(lines[i].gap || 0);
       if (gap > 0) parts.push({ silence: gap });
       console.log(`Reset line ${i + 1}/${lines.length} spoken (${buf.length} bytes, gap ${gap}s)`);
     }
 
-    const secs = await joinParts(parts, outputPath);
+    const secs = await joinParts(parts, outputPath, tmpDir);
     const remoteFilename = resetRemoteName(body.name, 'resets/reset');
     await uploadToBunny(outputPath, remoteFilename);
     fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -1285,7 +1319,7 @@ app.post('/concatenate', async (req, res) => {
       }
     }
 
-    const secs = await joinParts(built, outputPath);
+    const secs = await joinParts(built, outputPath, tmpDir);
     const remoteFilename = resetRemoteName(body.name, 'resets/joined');
     await uploadToBunny(outputPath, remoteFilename);
     fs.rmSync(tmpDir, { recursive: true, force: true });
