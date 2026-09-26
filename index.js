@@ -343,6 +343,14 @@ function savePromoCodes(codes) {
 // Set ADMIN_SECRET as a new Railway environment variable (any long random
 // string you choose) before using this endpoint.
 const ADMIN_SECRET = process.env.ADMIN_SECRET || '';
+// Only Make may start a mix, a reset-audio build or a join (added 26 Sep 2026).
+// Make sends the same X-Admin-Secret header it already uses for /admin/add-code.
+// The website only uses /create-checkout and /preview, which stay open.
+function requireMakeSecret(req, res, next) {
+  if (!ADMIN_SECRET) return res.status(503).json({ success: false, error: 'ADMIN_SECRET is not set on Railway.' });
+  if (req.get('X-Admin-Secret') !== ADMIN_SECRET) return res.status(401).json({ success: false, error: 'Not authorised.' });
+  next();
+}
 app.post('/admin/add-code', express.json(), async (req, res) => {
   if (!ADMIN_SECRET) return res.status(503).json({ error: 'ADMIN_SECRET not set on Railway yet.' });
   if (req.get('X-Admin-Secret') !== ADMIN_SECRET) return res.status(401).json({ error: 'Not authorised.' });
@@ -582,7 +590,7 @@ app.post('/create-checkout', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-app.post('/mix', async (req, res) => {
+app.post('/mix', requireMakeSecret, async (req, res) => {
   const { voice_url, volume, duration, respondent_id, callback_url } = req.body;
   const background = Array.isArray(req.body.background)
     ? String(req.body.background[0]).trim()
@@ -1172,7 +1180,7 @@ function speakLine(opts) {
 //
 // -> { "success": true, "download_url": "...", "seconds": 412.6, "lines": 37 }
 // ---------------------------------------------------------------------------
-app.post('/reset-audio', async (req, res) => {
+app.post('/reset-audio', requireMakeSecret, async (req, res) => {
   const body = req.body || {};
   const lines = Array.isArray(body.lines) ? body.lines : null;
 
@@ -1278,7 +1286,7 @@ app.post('/reset-audio', async (req, res) => {
 // POST /concatenate
 // { "name": "resets/x", "parts": [{ "url": "https://..." }, { "silence": 9 }] }
 // ---------------------------------------------------------------------------
-app.post('/concatenate', async (req, res) => {
+app.post('/concatenate', requireMakeSecret, async (req, res) => {
   const body = req.body || {};
   const parts = Array.isArray(body.parts) ? body.parts : null;
 
