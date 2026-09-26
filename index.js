@@ -599,7 +599,7 @@ app.post('/mix', requireMakeSecret, async (req, res) => {
   const levels = MIX_LEVELS[volume];
   const isSubliminal = volume === 'None (Subliminal only)';
   // Whispered over the near-silent binaural bed needs its own, much lower level.
-  const voiceDb = isSubliminal ? subliminalVoiceDb(background) : (volume === 'A little (Whispered)' && /binaural/i.test(String(background)) ? '-26dB' : levels.voice);
+  const voiceDb = isSubliminal ? subliminalVoiceDb(background) : (volume === 'A little (Whispered)' && /binaural/i.test(String(background)) ? '-26dB' : (levels && levels.voice));
   const voiceComp = isSubliminal ? SUBLIMINAL_VOICE_COMP : '';
   // Subliminal: NO ducking - the bed must stay perfectly steady (a duck keyed
   // by an inaudible voice reads as rhythmic vibration under the background).
