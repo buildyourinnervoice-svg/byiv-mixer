@@ -81,6 +81,12 @@ Main rule from Sylvia: test anything a customer can buy or use as part of any me
   - Not tested this round: freeing a seat at /manage and reusing it, and the employer's own emails
 - [ ] Scheduled jobs and watchdogs
 
+## Tasks for the next session
+
+1. Etsy personalisation (below): consent wording in the box label instead of the tap email, a recipient first name box on gift listings, and Cowork checking what extra boxes Etsy allows.
+2. Background sound quality, starting with rain (see that section).
+3. The remaining untested membership parts (see "Not yet tested").
+
 ## Next session: Etsy consent without the tap (Sylvia's priority)
 
 Sylvia doesn't want buyers to have to tap a link in an email, because people miss it, get refunded, and sales are lost. The tap link also shows a hook.eu1.make.com address, which looks wrong to buyers. Etsy only allows 2 dropdown options per listing, and both are used (sound and volume), so a consent dropdown won't fit.
@@ -115,6 +121,14 @@ Sylvia listened to the real Etsy test track (Rain, Barely there/Subliminal, 5 mi
 - On Subliminal, the bed is the whole track at about -32 LUFS. The bed chain (loudnorm, then acompressor ratio 6 with a fast attack) can make rain "pump" or hiss. Listen for pumping, a hard loop seam (rain loops are easy to hear), and low-bitrate artefacts.
 - Try a gentler chain for rain (no compressor, or ratio 2), a crossfaded loop, or a better recording. Check the result against the same order rendered with ocean or stream.
 - Fix it in the mixer (index.js) and regenerate the website preview clips so they match.
+- Sylvia doesn't want to keep steering buyers away from sounds. Research how good apps (Calm, Headspace, Endel, myNoise, Tide) get clean ambience, and apply the same approach to all 7 beds, not just rain. They typically use:
+  - long, high-quality source recordings (30 to 60 minutes, WAV or 320k), so loops are rare and far apart
+  - seamless crossfaded loops
+  - gentle or no compression on the bed
+  - an EQ that softens harsh hiss
+  - properly licensed sound libraries
+  Replace any weak beds and re-measure the levels afterwards (Clear about -39, Whispered about -49, Subliminal about -32).
+
 
 ## Watch in future tracks
 
