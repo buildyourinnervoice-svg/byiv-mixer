@@ -83,10 +83,16 @@ Main rule from Sylvia: test anything a customer can buy or use as part of any me
 
 ## Next session: Etsy consent without the tap (Sylvia's priority)
 
-Sylvia doesn't want buyers to have to tap a link in an email, because people miss it, get refunded, and sales are lost. Plan:
-1. Sylvia adds a required option to every Etsy track listing (like "Your background sound"). For example "Using what you write" with the choice "Yes, use what I've written (including any health details) to make my track". Gift and Christmas listings use: "Yes, use what I've written to make their track. I haven't included anything about their health."
-2. In Etsy Orders (7001679), read that option. When it's present, skip the consent email (module 42) and hand the order straight to the pipeline: record consent in 195100 and call Website Orders, exactly as Etsy Consent 7554991 does after a tap. When the option is missing (old listings), keep the tap email.
-3. Test with the TEST Etsy scenario (copy the same change there), then with one real order.
+Sylvia doesn't want buyers to have to tap a link in an email, because people miss it, get refunded, and sales are lost. The tap link also shows a hook.eu1.make.com address, which looks wrong to buyers. Etsy only allows 2 dropdown options per listing, and both are used (sound and volume), so a consent dropdown won't fit.
+
+Agreed direction: put the consent in the label of the text box the buyer already fills in. For example "What would you like this track to work on? By writing here, you agree we can use it, including any health details, to make your track." Gift and Christmas listings: "...By writing here, you agree we can use it to make their track, and you haven't included anything about their health." (Suggest Sylvia checks the wording with a GDPR adviser.)
+
+Order of work, because Etsy Orders finds answers by the exact box label:
+1. Sylvia sends the new label wording first.
+2. Update Etsy Orders (7001679) module 3 raw_focus to read the new labels (keep the old ones as fallbacks). Then, instead of the consent email (module 42), record consent in 195100 and hand the order to Website Orders directly, as Etsy Consent 7554991 does after a tap. Copy the change to the TEST Etsy scenario and test with fake receipts.
+3. Sylvia changes the labels on Etsy.
+4. One real test order.
+If the tap is kept for any listing, move the link to a page on the website (buildyourinnervoice.com/confirm) instead of the raw Make address.
 
 The first real Etsy order (10 October, receipt 4197027741) parsed correctly in every field: Rain, Barely there, gift email with no date (sent today), Christmas, sports. It was waiting for the tap at the time of writing.
 
