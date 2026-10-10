@@ -134,6 +134,12 @@ app.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (re
     } catch (err) {
       console.error('Forward to Make failed:', err.message);
     }
+    // 10 Oct 2026: tell Stripe the delivery failed so it retries the event
+    // (Stripe retries for up to 3 days). Returning 200 here meant a paid
+    // order that never reached Make was never tried again.
+    if (!forwarded) {
+      return res.status(500).send('Order not forwarded to Make yet, please retry');
+    }
     // ---- GDPR AUTO-SCRUB (added 18 Jul 2026) --------------------------------
     // Once the order is safely handed to Make, wipe the free-text the customer
     // shared (and any gift recipient's details) from Stripe's stored metadata,
@@ -376,7 +382,15 @@ function postJson(url, data) {
     const r = https.request(options, resp => {
       let out = '';
       resp.on('data', d => (out += d));
-      resp.on('end', () => resolve({ status: resp.statusCode, body: out }));
+      resp.on('end', () => {
+        // 10 Oct 2026: a non-2xx answer (webhook removed, queue full) used to
+        // count as delivered, so a paid order could be lost without anyone
+        // knowing. Treat it as a failure so the caller can retry or alert.
+        if (resp.statusCode < 200 || resp.statusCode >= 300) {
+          return reject(new Error(`POST ${u.hostname} answered ${resp.statusCode}: ${out.slice(0, 200)}`));
+        }
+        resolve({ status: resp.statusCode, body: out });
+      });
     });
     r.on('error', reject);
     r.write(body);
@@ -616,6 +630,9 @@ app.post('/mix', requireMakeSecret, async (req, res) => {
   }
   console.log('background =', background);
   console.log('voice_url =', voice_url);
+  // 10 Oct 2026: log the tier and the levels actually used, so a "my voice is
+  // too quiet" report can be checked against what the order really asked for.
+  console.log('volume =', volume, '| voice', voiceDb, '| bg', levels.bg, '| order', respondent_id);
   // ---- ASYNC MIXING (added 17 Jul 2026) ----------------------------------
   // Long tracks (4 hours) take far longer than Make's 5-minute HTTP ceiling,
   // so we fix the output filename NOW, reply immediately, render in the
@@ -636,7 +653,9 @@ app.post('/mix', requireMakeSecret, async (req, res) => {
     duration_label: req.body.duration_label || duration || '',
     affirmations: req.body.affirmations || '',
     risk: req.body.risk || '',
-    gift_message: req.body.gift_message || ''
+    gift_message: req.body.gift_message || '',
+    volume: volume || '',
+    background: background
   };
   if (req.body.gift_date) passthrough.gift_date = req.body.gift_date; // omit when empty: delivery filter relies on absence
   function postCallback(payload) {
