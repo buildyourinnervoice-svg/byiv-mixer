@@ -40,7 +40,6 @@ The "TEST - Etsy Orders" scenario takes fake receipts on its own webhook and sen
 - 3 website consent records from 23 September have an empty email.
 - The Etsy connection can't read listings (optional, not needed for orders).
 - Gift recipients of non-sport tracks don't get the topic practice sheet that people buying for themselves get.
-- Two gift emails (the "they choose" confirmation in Website Orders, and "Your gift has been opened" in Gift Redemption) say membership gives "unlimited tracks", but members are limited to 3 a day. The copy needs to match the limit, or the limit needs to change.
 
 ## Still to do (memberships)
 
@@ -67,5 +66,8 @@ Main rule from Sylvia: test anything a customer can buy or use as part of any me
   - A full team was refused, and so was a paused team
   - A team session ("Pre-mortem" for a month-end deadline) was written for the team, with no dashes
   - Not tested this round: freeing a seat at /manage and reusing it, and the employer's own emails
-  - The welcome email says "Unlimited tracks in any length, up to 3 a day", which contradicts itself. Suggest "Up to 3 tracks a day, in any length".
 - [ ] Scheduled jobs and watchdogs
+
+## Decisions
+
+- "Unlimited tracks" is fine in customer copy. The 3 a day limit is fair use and is covered in the terms, so don't flag the wording again.
