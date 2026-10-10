@@ -59,6 +59,10 @@ Measure delivered tracks, do not trust them. `ffmpeg -i track.mp3 -af ebur128 -f
 
 Every delivered track's link is in the "[FYI] BYIV order delivered" email in Sylvia's inbox.
 
+Integrated loudness is the whole mix, so also check the background on its own. Run the background file through the mixer's bed chain locally (`loudnorm=I=-23:TP=-2:LRA=11,volume=<MIX_LEVELS bg>,acompressor=threshold=0.0316:ratio=6:attack=8:release=220`) and compare its momentary loudness with the quietest 10% of the delivered track (the gaps between affirmations). On 10 October all seven beds matched within about 2 dB: Clear about -39, Whispered about -49, Subliminal about -32. Compare like with like on uneven beds such as ocean waves.
+
+Etsy can be tested without buying: the "TEST - Etsy Orders" scenario takes fake receipts on its own webhook and sends every email to Sylvia. Use receipt ids from 9000000001 and the +etsytest / +etsygift addresses, then clean the test rows out of data stores 195099, 195100 and 145519.
+
 ## Testing page changes without uploading them
 
 Load the edited page in jsdom, stub fetch so the access check returns {type:"personal"} and then {type:"workplace"}, stub HTMLMediaElement.prototype.play, and click through it. Always test both member types.
@@ -81,6 +85,8 @@ A weekly Make smoke test should exercise the real webhooks, check responses and 
 When reviewing any scenario, walk each of these deliberately:
 
 - `and` / `or` do not work inside `{{ }}`: tested on 10 October, they ALWAYS come out true, with no error. Use `&` and `|` (tested, they work) or nested `if()`. The words caused the reset outage on 20 September and the Whispered-for-everyone fault from 3 to 10 October. Search every scenario for ` and ` / ` or ` inside `{{ }}` after any edit.
+- Filter operators that do not exist (found 10 October: `text:greaterorequal` on the gift hold step) are accepted when saved and simply never pass. Every dated gift track since launch skipped the hold. Compare dates as numbers (`parseNumber(replace(date; "-"; ""))`) or inside an `if()`, and search blueprints for any `text:` operator other than equal, notequal, contain, notcontain, startwith, endwith, pattern.
+- One error in a module with no error handler can switch an instant scenario off entirely, and the failing bundle then blocks the queue (10 October: one Etsy "mark complete" failure stopped Track Delivery for every customer). Any module that talks to an outside service (Etsy, Stripe, HTTP) needs an error handler that alerts and then Ignores.
 - A number field (for example the Claude module's `max_tokens`) saved as text can be rejected by the API, but only on modules without the type hints in their metadata. Check numbers are numbers.
 - A module filter that blocks a bundle stops the entire downstream chain. No error.
 - A router where no route matches does nothing at all. Always ask what happens when none of the routes match.
