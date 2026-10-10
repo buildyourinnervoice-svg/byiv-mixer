@@ -84,8 +84,8 @@ Main rule from Sylvia: test anything a customer can buy or use as part of any me
   - Ran on 1 October: Monthly Team Report, Monthly Focus Check-in, scenario designs backup. The Helplines Monthly Check only failed while it was being edited on 4 October, and its last run succeeded
   - No failed runs in 2 weeks in Etsy Orders, Website Orders, Membership (Stripe events), Etsy Consent Reminders, Planner Safety Net or Inbound Auto-Reply. Track Delivery failed twice at 17:00 on fake receipt 9000000008, before the Etsy error handlers went in, and stayed switched on
   - The Gift Expiry Sweeper, Stuck Order Watchdog, and the morning runs of Gift Delivery and Gift Invite Sender show no runs recently. This is expected: each starts by searching for something specific (a stuck order, a gift due today) and Make doesn't log a run that finds nothing. The Held Orders Reminder reads every record, so it always logs. Their next runs are booked, which shows the scheduler still fires them
-  - Sport Friday Email is named "OFF until go-live" but Sylvia switched it on on 6 October. So far it has only gone to the +sporttest and +sportjoin test accounts. Rename it, or switch it off, before real sport members join
-  - The Stuck Order Watchdog is named "hourly" but runs once a day at 08:20
+  - Sport Friday Email (7785703) stays on (Sylvia's decision). It only emails active sport members who haven't turned the emails off, so new members get it from their first Friday. So far it has only gone to the +sporttest and +sportjoin test accounts, at about 5 credits each per week. Renamed "BYIV Sport Friday Email (sport members, Fridays 07:30)"
+  - The Stuck Order Watchdog (6812083) runs once a day at 08:20 to save credits (Sylvia's decision). Renamed from "(hourly)" to "BYIV Stuck Order Watchdog (daily 08:20)"
 
 ## Tasks for the next session
 
