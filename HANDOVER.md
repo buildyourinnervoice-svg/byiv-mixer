@@ -62,5 +62,12 @@ Main rule from Sylvia: test anything a customer can buy or use as part of any me
   - Member track (Ambient meditation, 5 minutes, Clear, padel serve): 5:00 exactly, -19.1 LUFS. It follows the new sport rules (it opens "I know this game", with no "push through") and has the practice sheet link
   - 5th track in a month stopped, with the monthly limit email
   - Not tested this round: the sport planner, and joining through Stripe
-- [ ] Employee membership: the 9-step employer test on EMP-TEST-INTERNAL only, then clean up
+- [x] Employee membership, tested 10 October on EMP-TEST-INTERNAL only, and cleaned up afterwards:
+  - Fresh activation worked: the welcome email arrived and the membership page showed "workplace" with the company name
+  - The same person again got "already a member" and their link re-sent
+  - A wrong code was refused, and a lowercase code works
+  - A full team was refused, and so was a paused team
+  - A team session ("Pre-mortem" for a month-end deadline) was written for the team, with no dashes
+  - Not tested this round: freeing a seat at /manage and reusing it, and the employer's own emails
+  - The welcome email says "Unlimited tracks in any length, up to 3 a day", which contradicts itself. Suggest "Up to 3 tracks a day, in any length".
 - [ ] Scheduled jobs and watchdogs
