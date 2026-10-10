@@ -41,7 +41,6 @@ The "TEST - Etsy Orders" scenario takes fake receipts on its own webhook and sen
 - The Etsy connection can't read listings (optional, not needed for orders).
 - Gift recipients of non-sport tracks don't get the topic practice sheet that people buying for themselves get.
 - Two gift emails (the "they choose" confirmation in Website Orders, and "Your gift has been opened" in Gift Redemption) say membership gives "unlimited tracks", but members are limited to 3 a day. The copy needs to match the limit, or the limit needs to change.
-- Carly (the customer who reported the quiet track) reached the 3 a day limit today, probably re-ordering after the volume fault. Consider raising her limit or making the tracks for her.
 
 ## Still to do (memberships)
 
