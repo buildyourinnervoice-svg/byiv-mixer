@@ -40,6 +40,9 @@ The "TEST - Etsy Orders" scenario takes fake receipts on its own webhook and sen
 - 3 website consent records from 23 September have an empty email.
 - The Etsy connection can't read listings (optional, not needed for orders).
 - Gift recipients of non-sport tracks don't get the topic practice sheet that people buying for themselves get.
+- Two gift emails (the "they choose" confirmation in Website Orders, and "Your gift has been opened" in Gift Redemption) say membership gives "unlimited tracks", but members are limited to 3 a day. The copy needs to match the limit, or the limit needs to change.
+- Carly (the customer who reported the quiet track) reached the 3 a day limit today, probably re-ordering after the volume fault. Consider raising her limit or making the tracks for her.
+- Make has been sending "you're reaching your credits limit" warnings (25 September, 2 October, 6 October). If credits run out, every scenario stops.
 
 ## Still to do (memberships)
 
