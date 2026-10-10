@@ -54,7 +54,8 @@ Main rule from Sylvia: test anything a customer can buy or use as part of any me
   - Membership page access check right for personal, sport and a wrong key
   - "What we hold about you" arrived within seconds
   - 5 minute reset ("Awake in the night") returned a guide, audio and an inbox copy, with no dashes
-  - Not tested this round: joining through Stripe, cancelling, preferences and the planner (website planner gifts were tested earlier in the day)
+  - 66 day planner (walking at lunchtime) built 66 days around the brief, starting with a "noticing" week, with no dashes
+  - Not tested this round: joining through Stripe, cancelling, preferences, and emailing the planner PDF
 - [x] Sport membership, tested 10 October with the +sporttest account:
   - Choosing a sport (Padel) saved
   - Membership page shows plan "sport" and tracks left
