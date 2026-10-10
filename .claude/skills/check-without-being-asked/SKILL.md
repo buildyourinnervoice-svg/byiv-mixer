@@ -80,7 +80,7 @@ A weekly Make smoke test should exercise the real webhooks, check responses and 
 
 When reviewing any scenario, walk each of these deliberately:
 
-- `and` / `or` do not work inside `{{ }}`. They are filter operators only. Use nested `if()`. This caused the reset outage on 20 September and the Whispered-for-everyone fault from 3 to 10 October.
+- `and` / `or` do not work inside `{{ }}`: tested on 10 October, they ALWAYS come out true, with no error. Use `&` and `|` (tested, they work) or nested `if()`. The words caused the reset outage on 20 September and the Whispered-for-everyone fault from 3 to 10 October. Search every scenario for ` and ` / ` or ` inside `{{ }}` after any edit.
 - A number field (for example the Claude module's `max_tokens`) saved as text can be rejected by the API, but only on modules without the type hints in their metadata. Check numbers are numbers.
 - A module filter that blocks a bundle stops the entire downstream chain. No error.
 - A router where no route matches does nothing at all. Always ask what happens when none of the routes match.
