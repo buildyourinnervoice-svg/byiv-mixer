@@ -81,6 +81,19 @@ Main rule from Sylvia: test anything a customer can buy or use as part of any me
   - Not tested this round: freeing a seat at /manage and reusing it, and the employer's own emails
 - [ ] Scheduled jobs and watchdogs
 
+## Next session: Etsy consent without the tap (Sylvia's priority)
+
+Sylvia doesn't want buyers to have to tap a link in an email, because people miss it, get refunded, and sales are lost. Plan:
+1. Sylvia adds a required option to every Etsy track listing (like "Your background sound"). For example "Using what you write" with the choice "Yes, use what I've written (including any health details) to make my track". Gift and Christmas listings use: "Yes, use what I've written to make their track. I haven't included anything about their health."
+2. In Etsy Orders (7001679), read that option. When it's present, skip the consent email (module 42) and hand the order straight to the pipeline: record consent in 195100 and call Website Orders, exactly as Etsy Consent 7554991 does after a tap. When the option is missing (old listings), keep the tap email.
+3. Test with the TEST Etsy scenario (copy the same change there), then with one real order.
+
+The first real Etsy order (10 October, receipt 4197027741) parsed correctly in every field: Rain, Barely there, gift email with no date (sent today), Christmas, sports. It was waiting for the tap at the time of writing.
+
+Etsy notes:
+- "Buy it now" did nothing for Sylvia until the item was put in the basket, even with every box filled. This is on Etsy's side. Check it on the phone app, and report it to Etsy if it happens there too.
+- Etsy Orders checks for new orders once an hour.
+
 ## Watch in future tracks
 
 - The affirmation writer sometimes still writes "my body knows" and negations such as "do not keep me wired" in non-sport tracks (seen in a Sleep track on 10 October). Consider adding a final self-check line to the prompt.
