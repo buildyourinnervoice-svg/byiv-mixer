@@ -616,6 +616,9 @@ app.post('/mix', requireMakeSecret, async (req, res) => {
   }
   console.log('background =', background);
   console.log('voice_url =', voice_url);
+  // 10 Oct 2026: log the tier and the levels actually used, so a "my voice is
+  // too quiet" report can be checked against what the order really asked for.
+  console.log('volume =', volume, '| voice', voiceDb, '| bg', levels.bg, '| order', respondent_id);
   // ---- ASYNC MIXING (added 17 Jul 2026) ----------------------------------
   // Long tracks (4 hours) take far longer than Make's 5-minute HTTP ceiling,
   // so we fix the output filename NOW, reply immediately, render in the
@@ -636,7 +639,9 @@ app.post('/mix', requireMakeSecret, async (req, res) => {
     duration_label: req.body.duration_label || duration || '',
     affirmations: req.body.affirmations || '',
     risk: req.body.risk || '',
-    gift_message: req.body.gift_message || ''
+    gift_message: req.body.gift_message || '',
+    volume: volume || '',
+    background: background
   };
   if (req.body.gift_date) passthrough.gift_date = req.body.gift_date; // omit when empty: delivery filter relies on absence
   function postCallback(payload) {
