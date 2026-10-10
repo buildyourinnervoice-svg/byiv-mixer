@@ -93,6 +93,8 @@ Sylvia approved this wording on 10 October:
 
 **For Claude Cowork on Sylvia's other account:** open each Etsy listing in the listing editor and check whether Etsy allows a separate consent question without losing anything. That could be a third variation, an extra personalisation box, or a required checkbox. Etsy currently seems to allow only 2 variations, and both are used for sound and volume. If a separate required box is possible, it's the safest form of consent and is preferred. Otherwise, use the label wording above. Either way, don't save any change to a box label until the Etsy Orders scenario has been updated to match (see the steps below), or orders will stop.
 
+**Also for Cowork: a recipient name box.** Etsy gift and Christmas track listings don't ask for the recipient's first name, so the gift email says "To you, from Sylvia" instead of "To Ame, from Sylvia". Check whether there's room for one more box, "Their first name", like the planner listings have. If there is, add it, then in the same Etsy Orders upload read it into recipient_name (Website Orders already uses question_PlodEb for the name).
+
 Order of work, because Etsy Orders finds answers by the exact box label:
 1. Sylvia sends the new label wording first.
 2. Update Etsy Orders (7001679) module 3 raw_focus to read the new labels (keep the old ones as fallbacks). Then, instead of the consent email (module 42), record consent in 195100 and hand the order to Website Orders directly, as Etsy Consent 7554991 does after a tap. Copy the change to the TEST Etsy scenario and test with fake receipts.
