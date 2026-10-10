@@ -48,7 +48,13 @@ The "TEST - Etsy Orders" scenario takes fake receipts on its own webhook and sen
 
 Main rule from Sylvia: test anything a customer can buy or use as part of any membership.
 
-- [ ] Normal membership: joining, membership page, own tracks within the 3 a day limit, 5 minute reset, planner, preferences, data request, cancelling
+- [x] Normal membership, tested 10 October with your own account:
+  - 4th track in a day stopped, with the limit email
+  - Member track (Binaural beats, 30 minutes, Clear, Money & abundance): 30:00 exactly, -18.8 LUFS, the affirmations followed the brief, and the practice sheet link works
+  - Membership page access check right for personal, sport and a wrong key
+  - "What we hold about you" arrived within seconds
+  - 5 minute reset ("Awake in the night") returned a guide, audio and an inbox copy, with no dashes
+  - Not tested this round: joining through Stripe, cancelling, preferences and the planner (website planner gifts were tested earlier in the day)
 - [ ] Sport membership: choosing a sport, the full practice sheet, 4 tracks a month, sport planner, membership page
 - [ ] Employee membership: the 9-step employer test on EMP-TEST-INTERNAL only, then clean up
 - [ ] Scheduled jobs and watchdogs
