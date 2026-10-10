@@ -100,7 +100,7 @@ Order of work, because Etsy Orders finds answers by the exact box label:
 4. One real test order.
 If the tap is kept for any listing, move the link to a page on the website (buildyourinnervoice.com/confirm) instead of the raw Make address.
 
-The first real Etsy order (10 October, receipt 4197027741) parsed correctly in every field: Rain, Barely there, gift email with no date (sent today), Christmas, sports. It was waiting for the tap at the time of writing.
+The first real Etsy order (10 October, receipt 4197027741) parsed correctly in every field: Rain, Barely there, gift email with no date (sent today), Christmas, sports. After the tap it went through end to end. The gift arrived 1 minute later with the right message, sports affirmations, the subliminal "How your track sounds" note and the sport practice sheet. The buyer got "Your gift has been delivered", and no "not marked complete" alert was sent, so the Etsy order was marked complete.
 
 Etsy notes:
 - "Buy it now" did nothing for Sylvia until the item was put in the basket, even with every box filled. This is on Etsy's side. Check it on the phone app, and report it to Etsy if it happens there too.
