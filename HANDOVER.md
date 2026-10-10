@@ -108,6 +108,14 @@ Etsy notes:
 - "Buy it now" did nothing for Sylvia until the item was put in the basket, even with every box filled. This is on Etsy's side. Check it on the phone app, and report it to Etsy if it happens there too.
 - Etsy Orders checks for new orders once an hour.
 
+## Rain background sounds poor (Sylvia, 10 October)
+
+Sylvia listened to the real Etsy test track (Rain, Barely there/Subliminal, 5 minutes: cdn .../mixed/BYIV-GENTLE-RAIN-SPORTS-CONFIDENCE-mv2sgh3f.mp3) and said the rain sounds awful. Investigate next session:
+- Compare it with the website preview (previews/v1/gentle-rain-subliminal.mp3) and with the source bed (backgrounds/v2/gentle-rain.mp3). Is the problem in the source file or added by the mix?
+- On Subliminal, the bed is the whole track at about -32 LUFS. The bed chain (loudnorm, then acompressor ratio 6 with a fast attack) can make rain "pump" or hiss. Listen for pumping, a hard loop seam (rain loops are easy to hear), and low-bitrate artefacts.
+- Try a gentler chain for rain (no compressor, or ratio 2), a crossfaded loop, or a better recording. Check the result against the same order rendered with ocean or stream.
+- Fix it in the mixer (index.js) and regenerate the website preview clips so they match.
+
 ## Watch in future tracks
 
 - The affirmation writer sometimes still writes "my body knows" and negations such as "do not keep me wired" in non-sport tracks (seen in a Sleep track on 10 October). Consider adding a final self-check line to the prompt.
