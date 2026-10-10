@@ -28,6 +28,7 @@ Before any work on BYIV, read `.claude/skills/check-without-being-asked/SKILL.md
 | Sport safety | The safety rules (no weight or food, no pushing through pain, injuries) only applied to sport members | Now in the sport rule for every sports track, plus "never write what their body knows" | Prompt saved and compared |
 | Gift practice sheets | Gift recipients got no practice sheet | Gift Delivery now adds the topic sheet (12 topics) or the sport sheet | "Sleep" gift showed the Sleep sheet link |
 | Employee welcome | "Unlimited tracks in any length, up to 3 a day" | Now "Up to 3 tracks a day, in any length" | Saved and compared |
+| Same-day gifts | A gift dated today waited until 09:00 (made for them) or 09:15 (they choose) the next morning | Track Delivery and Website Orders now start Gift Delivery or Gift Invite Sender straight away when the date is today. This uses credits only on those orders, and the morning runs stay as a backup. Buyer emails now say "later today" | Made-for-them gift arrived 2 minutes after ordering, and the they-choose invite 2 seconds after |
 | Dashes | Affirmations sometimes contained em dashes | Website Orders prompt forbids them, and any that slip through become commas | Saved and compared |
 
 ## Etsy test harness (no buying needed)
@@ -38,11 +39,17 @@ The "TEST - Etsy Orders" scenario takes fake receipts on its own webhook and sen
 
 - **Risk-3 Release (6570132)** has a prepared but unsaved update: the no-dashes rule, the menopause line and the sport safety rules. It's lower priority because those orders are reviewed by hand first.
 Left for another session because each one needs a large blueprint upload for a small effect:
-- **"They choose" gift email (Website Orders, module 101).** It says "On [date] we'll email them". For a gift ordered for today after 09:15, the invite really goes at 09:15 the next morning. Fix: when the date is today, say "tomorrow morning".
 - **Risk-3 Release (6570132), one upload for all of these.** Its background list has no "Surprise", so a released Surprise order always gets ocean waves (copy the Surprise switch from Website Orders module 20). Also add the sport safety rules, the no-dashes rule and the menopause line, which are all prepared in the session scratchpad as r3-new-1840.json. These orders are reviewed by hand first, so they're rare.
 - **Personal welcome email (Membership Stripe events, 6574497).** It still says "Unlimited tracks in any length, up to 3 a day". Change it to "Up to 3 tracks a day, in any length" to match the employee email, which was changed on 10 October.
 - **3 website consent records from 23 September have an empty email.** These are most likely early test rows. They're harmless and can be deleted from the consent log.
 - The Etsy connection can't read listings (optional, not needed for orders).
+
+## Not yet tested (next session)
+
+- Joining and cancelling through Stripe, for both personal and sport (needs a real or test card)
+- The member preferences page, and emailing the planner PDF
+- Freeing a seat at /manage and reusing it, and the employer's monthly report
+- Scheduled jobs and watchdogs (weekly smoke test, gift expiry sweeper, welcome guides)
 
 ## Still to do (memberships)
 
