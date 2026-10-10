@@ -29,7 +29,7 @@ Before any work on BYIV, read `.claude/skills/check-without-being-asked/SKILL.md
 | Gift practice sheets | Gift recipients got no practice sheet | Gift Delivery now adds the topic sheet (12 topics) or the sport sheet | "Sleep" gift showed the Sleep sheet link |
 | Employee welcome | "Unlimited tracks in any length, up to 3 a day" | Now "Up to 3 tracks a day, in any length" | Saved and compared |
 | Same-day gifts | A gift dated today waited until 09:00 (made for them) or 09:15 (they choose) the next morning | Track Delivery and Website Orders now start Gift Delivery or Gift Invite Sender straight away when the date is today. This uses credits only on those orders, and the morning runs stay as a backup. Buyer emails now say "later today" | Made-for-them gift arrived 2 minutes after ordering, and the they-choose invite 2 seconds after |
-| Volume note in delivery emails | People who chose Whispered or Subliminal could think the track was broken | Track Delivery and Gift Delivery show "How your track sounds" for Clear, Whispered or Subliminal, and the gift store now has a volume field. It only appears once the mixer sends the volume back, which needs the mixer change on this branch merged to main and deployed (not done yet) | Not showing yet, because the deployed mixer doesn't send the volume |
+| Volume note in delivery emails | People who chose Whispered or Subliminal could think the track was broken | Track Delivery and Gift Delivery show "How your track sounds" for Clear, Whispered or Subliminal, and the gift store now has a volume field. The mixer now sends the volume back (merged to main and deployed on 10 October) | Whispered member track email showed the note |
 | Gift cancel link | A large "Cancel this gift" button | Now a small grey line under the sign-off | Saved and compared |
 | Dashes | Affirmations sometimes contained em dashes | Website Orders prompt forbids them, and any that slip through become commas | Saved and compared |
 
@@ -42,7 +42,7 @@ The "TEST - Etsy Orders" scenario takes fake receipts on its own webhook and sen
 - **Risk-3 Release (6570132)** has a prepared but unsaved update: the no-dashes rule, the menopause line and the sport safety rules. It's lower priority because those orders are reviewed by hand first.
 Left for another session because each one needs a large blueprint upload for a small effect:
 - **Risk-3 Release (6570132), one upload for all of these.** Its background list has no "Surprise", so a released Surprise order always gets ocean waves (copy the Surprise switch from Website Orders module 20). Also add the sport safety rules, the no-dashes rule and the menopause line, which are all prepared in the session scratchpad as r3-new-1840.json. These orders are reviewed by hand first, so they're rare.
-- **Personal welcome email (Membership Stripe events, 6574497).** It still says "Unlimited tracks in any length, up to 3 a day". Change it to "Up to 3 tracks a day, in any length" to match the employee email, which was changed on 10 October.
+- **Personal welcome email (Membership Stripe events, 6574497).** It still says "Unlimited tracks in any length, up to 3 a day". Change it to "Up to 3 tracks a day, in any length" to match the employee email, which was changed on 10 October. Only module 4 ("Welcome email", the "What's included" list) needs it. Modules 116 and 122 (sport emails) say "as many as you like, up to 3 a day", which fits the Decision below. Tried on the evening of 10 October: the session's safety check blocked the upload to this live payments scenario, so it's unchanged and needs Sylvia's go-ahead. It also sits awkwardly with the Decision that "Unlimited" is fine, so confirm with Sylvia that she still wants it.
 - **3 website consent records from 23 September have an empty email.** These are most likely early test rows. They're harmless and can be deleted from the consent log.
 - The Etsy connection can't read listings (optional, not needed for orders).
 
@@ -51,7 +51,6 @@ Left for another session because each one needs a large blueprint upload for a s
 - Joining and cancelling through Stripe, for both personal and sport (needs a real or test card)
 - The member preferences page, and emailing the planner PDF
 - Freeing a seat at /manage and reusing it, and the employer's monthly report
-- Scheduled jobs and watchdogs (weekly smoke test, gift expiry sweeper, welcome guides)
 
 ## Still to do (memberships)
 
@@ -79,7 +78,71 @@ Main rule from Sylvia: test anything a customer can buy or use as part of any me
   - A full team was refused, and so was a paused team
   - A team session ("Pre-mortem" for a month-end deadline) was written for the team, with no dashes
   - Not tested this round: freeing a seat at /manage and reusing it, and the employer's own emails
-- [ ] Scheduled jobs and watchdogs
+- [x] Scheduled jobs and watchdogs, checked 10 October evening from the Make run history (no test orders needed):
+  - Every scheduled scenario is on, none is paused, none has queued failed runs, and every one has its next run booked
+  - Ran on time every day or week: GDPR Purge, Payment Stop, Held Orders Reminder, Employer Wind-down, Welcome Guides, Weekly Smoke Test (Mondays), records backup (Sundays)
+  - Ran on 1 October: Monthly Team Report, Monthly Focus Check-in, scenario designs backup. The Helplines Monthly Check only failed while it was being edited on 4 October, and its last run succeeded
+  - No failed runs in 2 weeks in Etsy Orders, Website Orders, Membership (Stripe events), Etsy Consent Reminders, Planner Safety Net or Inbound Auto-Reply. Track Delivery failed twice at 17:00 on fake receipt 9000000008, before the Etsy error handlers went in, and stayed switched on
+  - The Gift Expiry Sweeper, Stuck Order Watchdog, and the morning runs of Gift Delivery and Gift Invite Sender show no runs recently. This is expected: each starts by searching for something specific (a stuck order, a gift due today) and Make doesn't log a run that finds nothing. The Held Orders Reminder reads every record, so it always logs. Their next runs are booked, which shows the scheduler still fires them
+  - Sport Friday Email is named "OFF until go-live" but Sylvia switched it on on 6 October. So far it has only gone to the +sporttest and +sportjoin test accounts. Rename it, or switch it off, before real sport members join
+  - The Stuck Order Watchdog is named "hourly" but runs once a day at 08:20
+
+## Tasks for the next session
+
+1. Etsy personalisation (below): consent wording in the box label instead of the tap email, a recipient first name box on gift listings, and Cowork checking what extra boxes Etsy allows.
+2. Background sound quality, starting with rain (see that section).
+3. The remaining untested membership parts (see "Not yet tested").
+
+## Next session: Etsy consent without the tap (Sylvia's priority)
+
+Sylvia doesn't want buyers to have to tap a link in an email, because people miss it, get refunded, and sales are lost. The tap link also shows a hook.eu1.make.com address, which looks wrong to buyers. Etsy only allows 2 dropdown options per listing, and both are used (sound and volume), so a consent dropdown won't fit.
+
+Agreed direction: put the consent in the label of the text box the buyer already fills in. For example "What would you like this track to work on? By writing here, you agree we can use it, including any health details, to make your track." Gift and Christmas listings: "...By writing here, you agree we can use it to make their track, and you haven't included anything about their health." (Suggest Sylvia checks the wording with a GDPR adviser.)
+
+Sylvia approved this wording on 10 October:
+- Track listings, the box label: "What would you like this track to work on? By writing here, you agree we can use it, including any health details, to make your track."
+- Gift and Christmas listings, the box label: "Tell us about them and what you'd like their track to help with. By writing here, you agree we can use it to make their track, and you haven't included anything about their health."
+
+**For Claude Cowork on Sylvia's other account:** open each Etsy listing in the listing editor and check whether Etsy allows a separate consent question without losing anything. That could be a third variation, an extra personalisation box, or a required checkbox. Etsy currently seems to allow only 2 variations, and both are used for sound and volume. If a separate required box is possible, it's the safest form of consent and is preferred. Otherwise, use the label wording above. Either way, don't save any change to a box label until the Etsy Orders scenario has been updated to match (see the steps below), or orders will stop.
+
+**Also for Cowork: a recipient name box.** Etsy gift and Christmas track listings don't ask for the recipient's first name, so the gift email says "To you, from Sylvia" instead of "To Ame, from Sylvia". Check whether there's room for one more box, "Their first name", like the planner listings have. If there is, add it, then in the same Etsy Orders upload read it into recipient_name (Website Orders already uses question_PlodEb for the name).
+
+Order of work, because Etsy Orders finds answers by the exact box label:
+1. Sylvia sends the new label wording first.
+2. Update Etsy Orders (7001679) module 3 raw_focus to read the new labels (keep the old ones as fallbacks). Then, instead of the consent email (module 42), record consent in 195100 and hand the order to Website Orders directly, as Etsy Consent 7554991 does after a tap. Copy the change to the TEST Etsy scenario and test with fake receipts.
+3. Sylvia changes the labels on Etsy.
+4. One real test order.
+If the tap is kept for any listing, move the link to a page on the website (buildyourinnervoice.com/confirm) instead of the raw Make address.
+
+The first real Etsy order (10 October, receipt 4197027741) parsed correctly in every field: Rain, Barely there, gift email with no date (sent today), Christmas, sports. After the tap it went through end to end. The gift arrived 1 minute later with the right message, sports affirmations, the subliminal "How your track sounds" note and the sport practice sheet. The buyer got "Your gift has been delivered", and no "not marked complete" alert was sent, so the Etsy order was marked complete.
+
+Etsy notes:
+- "Buy it now" did nothing for Sylvia until the item was put in the basket, even with every box filled. This is on Etsy's side. Check it on the phone app, and report it to Etsy if it happens there too.
+- Etsy Orders checks for new orders once an hour.
+
+## Rain background sounds poor (Sylvia, 10 October)
+
+**Before starting:** the cloud environment's network settings block cdn.buildyourinnervoice.com, so a session can't download tracks to measure them. Sylvia was asked on 10 October to add it under Allowed domains (environment menu in the session title bar, Edit, Network access). Check that this is done first. The track link is in the "Sylvia has sent you a gift" email to +etsygift, sent at 19:30 on 10 October.
+
+What the code shows (`index.js` around line 733): on Subliminal the bed is set to -23 LUFS, then the compressor (threshold -30 dBFS, ratio 6, 8 ms attack) does most of the work of bringing it down to about -32. It squashes every raindrop. The single-pass loudnorm changes the gain as it goes, which can also pump. The bed is turned into MP3 three times (source, seamless loop at 192k, final mix at 192k). Most likely fix: drop the bed compressor or set it to ratio 2 or less, set the level with one fixed volume change, and keep the seamless loop as WAV. Measure before and after.
+
+Sylvia listened to the real Etsy test track (Rain, Barely there/Subliminal, 5 minutes: cdn .../mixed/BYIV-GENTLE-RAIN-SPORTS-CONFIDENCE-mv2sgh3f.mp3) and said the rain sounds awful. Investigate next session:
+- Compare it with the website preview (previews/v1/gentle-rain-subliminal.mp3) and with the source bed (backgrounds/v2/gentle-rain.mp3). Is the problem in the source file or added by the mix?
+- On Subliminal, the bed is the whole track at about -32 LUFS. The bed chain (loudnorm, then acompressor ratio 6 with a fast attack) can make rain "pump" or hiss. Listen for pumping, a hard loop seam (rain loops are easy to hear), and low-bitrate artefacts.
+- Try a gentler chain for rain (no compressor, or ratio 2), a crossfaded loop, or a better recording. Check the result against the same order rendered with ocean or stream.
+- Fix it in the mixer (index.js) and regenerate the website preview clips so they match.
+- Sylvia doesn't want to keep steering buyers away from sounds. Research how good apps (Calm, Headspace, Endel, myNoise, Tide) get clean ambience, and apply the same approach to all 7 beds, not just rain. They typically use:
+  - long, high-quality source recordings (30 to 60 minutes, WAV or 320k), so loops are rare and far apart
+  - seamless crossfaded loops
+  - gentle or no compression on the bed
+  - an EQ that softens harsh hiss
+  - properly licensed sound libraries
+  Replace any weak beds and re-measure the levels afterwards (Clear about -39, Whispered about -49, Subliminal about -32).
+
+
+## Watch in future tracks
+
+- The affirmation writer sometimes still writes "my body knows" and negations such as "do not keep me wired" in non-sport tracks (seen in a Sleep track on 10 October). Consider adding a final self-check line to the prompt.
 
 ## Decisions
 
