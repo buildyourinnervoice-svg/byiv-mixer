@@ -249,6 +249,40 @@ function subliminalVoiceDb(bg) {
   for (const s of SUBLIMINAL_VOICE_LEVELS) { if (s.re.test(String(bg))) return s.db; }
   return '-30dB';
 }
+// ---- SUBLIMINAL RAIN (10 Oct 2026, owner listening tests) -----------------
+// The shared chain below squashes the bed with acompressor, which turned rain
+// into a flat, constant hiss on Subliminal ("it just sounds like a loud hiss
+// all the way through"). Subliminal + rain now gets its own chain:
+//   - no compressor, so the rain keeps its natural movement
+//   - top end softened (high shelf -9dB at 2.5kHz, lowpass 6.5kHz)
+//   - much quieter: about -41 LUFS instead of about -28
+//   - slow, gentle rises (RAIN_SWELL): quiet most of the time, rising by up to
+//     about 4dB now and then. Cycles of 53s and 113s, independent of the bed
+//     loop, so long tracks never line up the same way twice.
+//   - the hidden voice follows the same rises at a fixed distance below the
+//     rain. Measured on separate stems it sits at least as far under the rain
+//     as the old chain in every speech band (280-4500, 500-2000, 2500-4500 Hz).
+// Whispered, Clear, thunderstorm and every other sound are unchanged.
+// The softened rain no longer covers the voice's "s" and "sh" sounds, which
+// poked through as a faint on-and-off ringing. The voice is cut much harder
+// above 2.2kHz (24dB/octave) so that, checked moment by moment in 1/3-octave
+// bands, it never comes within 10dB of the rain.
+const RAIN_VOICE_FILTER = 'highpass=f=280:poles=2,lowpass=f=2200:poles=2,lowpass=f=2200:poles=2,acompressor=threshold=0.02:ratio=4:attack=12:release=250';
+const RAIN_SWELL = "volume=eval=frame:volume='pow(10,(-9+4*pow(max(0,sin(2*PI*t/113)),3)+2*pow(max(0,sin(2*PI*t/53+2.1)),3))/20)'";
+function isSubliminalRain(volume, background) {
+  return volume === 'None (Subliminal only)' && /rain/i.test(String(background)) && !/thunder|storm/i.test(String(background));
+}
+// Filter graph for Subliminal rain: [bg0] is the rain bed, [1:a] the voice.
+// withVoice=false renders the bed alone (sound previews).
+function subliminalRainFilter(withVoice, fadeStart, fadeSecs) {
+  const bed = `[bg0]loudnorm=I=-23:TP=-2:LRA=20,highshelf=f=2500:g=-9,lowpass=f=6500,volume=-8dB,${RAIN_SWELL}[bg];`;
+  const end = fadeSecs ? `alimiter=limit=0.95,afade=t=out:st=${fadeStart}:d=${fadeSecs}[out]` : 'alimiter=limit=0.95[out]';
+  if (!withVoice) return bed + `[bg]${end}`;
+  return bed +
+    `[1:a]loudnorm=I=-19:TP=-2:LRA=11,apad=pad_dur=2,volume=-44dB,${RAIN_VOICE_FILTER},` +
+    `aloop=loop=-1:size=2147483647,${RAIN_SWELL},volume=3dB[v];` +
+    `[bg][v]amix=inputs=2:duration=first:normalize=0,${end}`;
+}
 // Light compression on the subliminal voice only: evens out word peaks so no
 // syllable pokes above the masking bed.
 const SUBLIMINAL_VOICE_COMP = ',highpass=f=280:poles=2,lowpass=f=4500,acompressor=threshold=0.02:ratio=4:attack=12:release=250';
@@ -633,6 +667,7 @@ app.post('/mix', requireMakeSecret, async (req, res) => {
   // 10 Oct 2026: log the tier and the levels actually used, so a "my voice is
   // too quiet" report can be checked against what the order really asked for.
   console.log('volume =', volume, '| voice', voiceDb, '| bg', levels.bg, '| order', respondent_id);
+  if (isSubliminalRain(volume, background)) console.log('subliminal rain chain (quiet, swells, no compressor)');
   // ---- ASYNC MIXING (added 17 Jul 2026) ----------------------------------
   // Long tracks (4 hours) take far longer than Make's 5-minute HTTP ceiling,
   // so we fix the output filename NOW, reply immediately, render in the
@@ -730,7 +765,7 @@ app.post('/mix', requireMakeSecret, async (req, res) => {
       // tracks.
       const fadeSecs = 6;
       const fadeStart = Math.max(0, durationSecs - fadeSecs);
-      const filterChain =
+      const filterChain = isSubliminalRain(volume, background) ? subliminalRainFilter(true, fadeStart, fadeSecs) :
         `[bg0]loudnorm=I=-23:TP=-2:LRA=11[bgn];` +
         `[bgn]volume=${levels.bg}[bgv];` +
         `[bgv]acompressor=threshold=0.0316:ratio=6:attack=8:release=220[bgc];` +
@@ -944,6 +979,9 @@ app.get('/preview', async (req, res) => {
       `[bgn]volume=${bgvol}[bgv];` +
       `[bgv]acompressor=threshold=0.0316:ratio=6:attack=8:release=220[bg];`;
     let filter, extraInputs = [];
+    // Subliminal rain uses its own chain (see subliminalRainFilter), unless a
+    // raw-dB override was given for testing.
+    const rainChain = isSubliminalRain(tierKey, sound) && !dbOk(req.query.voicevol) && !dbOk(req.query.bgvol);
     if (voice) {
       // voice can be a full https URL, or just an order/submission id — in
       // which case we build the CDN voice-file URL ourselves (this avoids
@@ -956,7 +994,7 @@ app.get('/preview', async (req, res) => {
       tmpFiles.push(vTmp);
       extraInputs = ['-i', vTmp];
       // Same voice conditioning + sidechain duck as /mix.
-      filter = bgLabel +
+      filter = rainChain ? '[0:a]anull[bg0];' + subliminalRainFilter(true) : bgLabel +
         `[1:a]loudnorm=I=-19:TP=-2:LRA=11,apad=pad_dur=2,volume=${voicevol}${subComp}[padded];` +
         `[padded]aloop=loop=-1:size=2147483647[voiceloop];` +
         `[voiceloop]asplit=2[voicemix][voicekey];` +
@@ -964,7 +1002,7 @@ app.get('/preview', async (req, res) => {
         `[bgducked][voicemix]amix=inputs=2:duration=first:normalize=0[mix];` +
         `[mix]alimiter=limit=0.95[out]`;
     } else {
-      filter = bgLabel + '[bg]alimiter=limit=0.95[out]';
+      filter = rainChain ? '[0:a]anull[bg0];' + subliminalRainFilter(false) : bgLabel + '[bg]alimiter=limit=0.95[out]';
     }
     res.setHeader('Content-Type', 'audio/mpeg');
     const args = [
