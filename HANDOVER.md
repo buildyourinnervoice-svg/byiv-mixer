@@ -26,6 +26,8 @@ Before any work on BYIV, read `.claude/skills/check-without-being-asked/SKILL.md
 | Christmas cards | Planner gifts missed the card | Card shown for Secret Santa, Christmas words, or a send date from 1 November to 6 January | Planner gift emails checked |
 | Sport practice sheet | Etsy sports tracks and all gift emails had no practice sheet | Etsy Consent sends focus "Sports confidence" for the 2 sports listings, and Gift Delivery shows the sheet for sports gifts | Netball (not a gift) and cross country (gift) both got the link |
 | Sport safety | The safety rules (no weight or food, no pushing through pain, injuries) only applied to sport members | Now in the sport rule for every sports track, plus "never write what their body knows" | Prompt saved and compared |
+| Gift practice sheets | Gift recipients got no practice sheet | Gift Delivery now adds the topic sheet (12 topics) or the sport sheet | "Sleep" gift showed the Sleep sheet link |
+| Employee welcome | "Unlimited tracks in any length, up to 3 a day" | Now "Up to 3 tracks a day, in any length" | Saved and compared |
 | Dashes | Affirmations sometimes contained em dashes | Website Orders prompt forbids them, and any that slip through become commas | Saved and compared |
 
 ## Etsy test harness (no buying needed)
@@ -35,11 +37,12 @@ The "TEST - Etsy Orders" scenario takes fake receipts on its own webhook and sen
 ## Waiting for a decision or not done
 
 - **Risk-3 Release (6570132)** has a prepared but unsaved update: the no-dashes rule, the menopause line and the sport safety rules. It's lower priority because those orders are reviewed by hand first.
-- The buyer email for a "they choose" gift says "On 10 October we'll email them", but the invite actually goes at 09:15 the next morning.
-- The Risk-3 Release background list has no "Surprise", so a released Surprise order gets ocean waves.
-- 3 website consent records from 23 September have an empty email.
+Left for another session because each one needs a large blueprint upload for a small effect:
+- **"They choose" gift email (Website Orders, module 101).** It says "On [date] we'll email them". For a gift ordered for today after 09:15, the invite really goes at 09:15 the next morning. Fix: when the date is today, say "tomorrow morning".
+- **Risk-3 Release (6570132), one upload for all of these.** Its background list has no "Surprise", so a released Surprise order always gets ocean waves (copy the Surprise switch from Website Orders module 20). Also add the sport safety rules, the no-dashes rule and the menopause line, which are all prepared in the session scratchpad as r3-new-1840.json. These orders are reviewed by hand first, so they're rare.
+- **Personal welcome email (Membership Stripe events, 6574497).** It still says "Unlimited tracks in any length, up to 3 a day". Change it to "Up to 3 tracks a day, in any length" to match the employee email, which was changed on 10 October.
+- **3 website consent records from 23 September have an empty email.** These are most likely early test rows. They're harmless and can be deleted from the consent log.
 - The Etsy connection can't read listings (optional, not needed for orders).
-- Gift recipients of non-sport tracks don't get the topic practice sheet that people buying for themselves get.
 
 ## Still to do (memberships)
 
