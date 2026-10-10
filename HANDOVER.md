@@ -29,7 +29,7 @@ Before any work on BYIV, read `.claude/skills/check-without-being-asked/SKILL.md
 | Gift practice sheets | Gift recipients got no practice sheet | Gift Delivery now adds the topic sheet (12 topics) or the sport sheet | "Sleep" gift showed the Sleep sheet link |
 | Employee welcome | "Unlimited tracks in any length, up to 3 a day" | Now "Up to 3 tracks a day, in any length" | Saved and compared |
 | Same-day gifts | A gift dated today waited until 09:00 (made for them) or 09:15 (they choose) the next morning | Track Delivery and Website Orders now start Gift Delivery or Gift Invite Sender straight away when the date is today. This uses credits only on those orders, and the morning runs stay as a backup. Buyer emails now say "later today" | Made-for-them gift arrived 2 minutes after ordering, and the they-choose invite 2 seconds after |
-| Volume note in delivery emails | People who chose Whispered or Subliminal could think the track was broken | Track Delivery and Gift Delivery show "How your track sounds" for Clear, Whispered or Subliminal, and the gift store now has a volume field. It only appears once the mixer sends the volume back, which needs the mixer change on this branch merged to main and deployed (not done yet) | Not showing yet, because the deployed mixer doesn't send the volume |
+| Volume note in delivery emails | People who chose Whispered or Subliminal could think the track was broken | Track Delivery and Gift Delivery show "How your track sounds" for Clear, Whispered or Subliminal, and the gift store now has a volume field. The mixer now sends the volume back (merged to main and deployed on 10 October) | Whispered member track email showed the note |
 | Gift cancel link | A large "Cancel this gift" button | Now a small grey line under the sign-off | Saved and compared |
 | Dashes | Affirmations sometimes contained em dashes | Website Orders prompt forbids them, and any that slip through become commas | Saved and compared |
 
@@ -80,6 +80,10 @@ Main rule from Sylvia: test anything a customer can buy or use as part of any me
   - A team session ("Pre-mortem" for a month-end deadline) was written for the team, with no dashes
   - Not tested this round: freeing a seat at /manage and reusing it, and the employer's own emails
 - [ ] Scheduled jobs and watchdogs
+
+## Watch in future tracks
+
+- The affirmation writer sometimes still writes "my body knows" and negations such as "do not keep me wired" in non-sport tracks (seen in a Sleep track on 10 October). Consider adding a final self-check line to the prompt.
 
 ## Decisions
 
