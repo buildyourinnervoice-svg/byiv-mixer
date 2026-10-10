@@ -87,6 +87,12 @@ Sylvia doesn't want buyers to have to tap a link in an email, because people mis
 
 Agreed direction: put the consent in the label of the text box the buyer already fills in. For example "What would you like this track to work on? By writing here, you agree we can use it, including any health details, to make your track." Gift and Christmas listings: "...By writing here, you agree we can use it to make their track, and you haven't included anything about their health." (Suggest Sylvia checks the wording with a GDPR adviser.)
 
+Sylvia approved this wording on 10 October:
+- Track listings, the box label: "What would you like this track to work on? By writing here, you agree we can use it, including any health details, to make your track."
+- Gift and Christmas listings, the box label: "Tell us about them and what you'd like their track to help with. By writing here, you agree we can use it to make their track, and you haven't included anything about their health."
+
+**For Claude Cowork on Sylvia's other account:** open each Etsy listing in the listing editor and check whether Etsy allows a separate consent question without losing anything. That could be a third variation, an extra personalisation box, or a required checkbox. Etsy currently seems to allow only 2 variations, and both are used for sound and volume. If a separate required box is possible, it's the safest form of consent and is preferred. Otherwise, use the label wording above. Either way, don't save any change to a box label until the Etsy Orders scenario has been updated to match (see the steps below), or orders will stop.
+
 Order of work, because Etsy Orders finds answers by the exact box label:
 1. Sylvia sends the new label wording first.
 2. Update Etsy Orders (7001679) module 3 raw_focus to read the new labels (keep the old ones as fallbacks). Then, instead of the consent email (module 42), record consent in 195100 and hand the order to Website Orders directly, as Etsy Consent 7554991 does after a tap. Copy the change to the TEST Etsy scenario and test with fake receipts.
