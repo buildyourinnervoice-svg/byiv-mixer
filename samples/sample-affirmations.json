@@ -147,7 +147,7 @@
     }
   },
   "home": {
-    "clear": {
+    "full": {
       "focus": "confidence-self-esteem",
       "sound": "gentle-rain"
     },
