@@ -1,0 +1,163 @@
+{
+  "_about": "Words for the website samples. Written to the same rules as the live affirmation writer (Website Orders module 14) and the house writing rules: first person, present tense, plain words, the wanted thing stated as already true, no negations, no medical claims, no gendered words. The sport set also follows the sport psychology rules. 5 lines each, spoken with the same voice, settings and 1.7 second gaps as real orders.",
+  "voice": {
+    "voice_id": "zgMBgRC8qP5rqHQE4dEV",
+    "model_id": "eleven_multilingual_v2",
+    "voice_settings": {
+      "stability": 0.5,
+      "similarity_boost": 0.75,
+      "style": 0,
+      "speed": 1,
+      "use_speaker_boost": false
+    },
+    "lead_in": 0.9,
+    "gap": 1.7,
+    "continuity": "previous"
+  },
+  "focus": {
+    "calmer-parenting": {
+      "label": "Calmer parenting",
+      "lines": [
+        "When my children need me, I stay calm.",
+        "Before I answer, I take a slow breath.",
+        "My voice is kind, even on a busy morning.",
+        "Patience comes easily to me as a parent.",
+        "Each day I give myself the same kindness I give my family."
+      ]
+    },
+    "career-work": {
+      "label": "Career & work",
+      "lines": [
+        "My work is good, and I know it.",
+        "In meetings, I speak up with confidence.",
+        "Asking for what I need at work feels natural to me.",
+        "My ideas are worth sharing.",
+        "At the end of each day, I know I did my best."
+      ]
+    },
+    "confidence-self-esteem": {
+      "label": "Confidence & self-esteem",
+      "lines": [
+        "I like who I am.",
+        "My own judgement is worth trusting.",
+        "When I speak, my words are clear and calm.",
+        "Every step I have taken so far makes me proud.",
+        "Good things belong in my life."
+      ]
+    },
+    "focus-productivity": {
+      "label": "Focus & productivity",
+      "lines": [
+        "One task at a time gets my full attention.",
+        "My work starts straight away.",
+        "What I begin, I finish.",
+        "Today I know exactly what matters most.",
+        "Calm, steady work comes easily to me."
+      ]
+    },
+    "gratitude-self-love": {
+      "label": "Gratitude & self-love",
+      "lines": [
+        "Each day, I notice something good.",
+        "My words to myself are kind.",
+        "Looking at my life, I feel grateful.",
+        "I am worthy of love and care.",
+        "Everything I do each day is worth appreciating."
+      ]
+    },
+    "grief-heartbreak-letting-go": {
+      "label": "Grief, heartbreak & letting go",
+      "lines": [
+        "Whatever I feel today is allowed.",
+        "I am gentle with myself.",
+        "The good memories stay with me.",
+        "Support is something I let in.",
+        "Each day, I take things as they come."
+      ]
+    },
+    "health-vitality": {
+      "label": "Health & vitality",
+      "lines": [
+        "My choices help me feel well.",
+        "Moving every day is something I enjoy.",
+        "Rest is part of how I look after myself.",
+        "Looking after myself makes me proud.",
+        "Every day, I make time for the things that give me energy."
+      ]
+    },
+    "money-abundance": {
+      "label": "Money & abundance",
+      "lines": [
+        "I look at my money calmly.",
+        "Clear decisions about spending and saving come naturally to me.",
+        "Managing money is something I do well.",
+        "My work has value, and so does what it earns.",
+        "With confidence, I plan for the future."
+      ]
+    },
+    "motivation": {
+      "label": "Motivation",
+      "lines": [
+        "Today I take the first step.",
+        "When a task takes time, I keep going.",
+        "Keeping my word comes naturally to me.",
+        "Every bit of progress feels good.",
+        "Following through is who I am."
+      ]
+    },
+    "relationships-connection": {
+      "label": "Relationships & connection",
+      "lines": [
+        "I listen with care.",
+        "When I share my feelings, I share them kindly.",
+        "The people who matter to me get my time.",
+        "My friendships are warm and honest.",
+        "Giving and receiving love comes easily to me."
+      ]
+    },
+    "sleep": {
+      "label": "Sleep",
+      "lines": [
+        "I settle easily at bedtime.",
+        "At night, my mind is calm.",
+        "Before I sleep, I put the day down.",
+        "Lying down, I relax fully.",
+        "Each morning, I wake up feeling rested."
+      ]
+    },
+    "stress-anxiety-relief": {
+      "label": "Stress & anxiety relief",
+      "lines": [
+        "Slow breaths help me feel calm.",
+        "One thing at a time is how I handle my day.",
+        "Whatever today brings, I trust myself to cope.",
+        "When I need calm, I know how to find it.",
+        "Rest is part of my day."
+      ]
+    },
+    "sport": {
+      "label": "Sports confidence",
+      "lines": [
+        "My training is with me, and I trust it.",
+        "The nerves before I start mean I am ready.",
+        "After a mistake, I reset and focus on the next action.",
+        "I see myself making the next move cleanly and with confidence.",
+        "Eyes on the target."
+      ]
+    }
+  },
+  "home": {
+    "full": {
+      "focus": "confidence-self-esteem",
+      "sound": "gentle-rain"
+    },
+    "whispered": {
+      "focus": "sleep",
+      "sound": "forest-sounds"
+    },
+    "subliminal": {
+      "focus": "stress-anxiety-relief",
+      "sound": "ambient-meditation"
+    }
+  }
+}
