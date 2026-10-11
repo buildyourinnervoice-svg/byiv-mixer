@@ -1558,8 +1558,11 @@ async function renderSample({ sound, volume, voicePath, bgPath, secs, outPath })
   if (voicePath) {
     inputs.push('-i', voicePath);
     graph = head + mixFilterChain(volume, bgUrl, fadeStart, fadeSecs);
-  } else if (isSubliminalRain(volume, bgUrl)) {
-    graph = head + subliminalRainFilter(false, fadeStart, fadeSecs);
+  } else if (isRain(bgUrl)) {
+    // Step 4 is for hearing the sound itself, so rain gets its soft treatment
+    // at the same level as the other sounds' previews (about -31 LUFS), not the
+    // much quieter Subliminal level.
+    graph = head + `[bg0]loudnorm=I=-23:TP=-2:LRA=20,${RAIN_SOFT},alimiter=limit=0.95,afade=t=out:st=${fadeStart}:d=${fadeSecs}[out]`;
   } else {
     // background on its own, levelled the way the Subliminal chain levels it
     graph = head + `[bg0]loudnorm=I=-23:TP=-2:LRA=11,volume=0dB,acompressor=threshold=0.0316:ratio=6:attack=8:release=220,` +
