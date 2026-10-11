@@ -223,3 +223,9 @@ After uploading the "planner daily view" zip and purging, add the sentence by ha
   ` When it’s ready, you can also open a daily view on your phone, which shows one day at a time and lets you tap a star each day you do it.`
 
 Save each scenario. The scratch scenarios and scratch records have been deleted. The Make API key in the keychain can only read designs, not save them, so a Make HTTP module can't do these edits.
+
+## 12 Oct: planner page sport wording
+
+/planner/ reused a cached membership check (12 hours), so a sport member could see the general examples. It now always checks fresh (`byivCheck(key, true)`), the same as /my/. Live and checked.
+
+The "same task every day" report was a test email link (dummy text "Test day N: ..."), not a real planner. Not a bug.
