@@ -210,3 +210,16 @@ Sylvia listened to the real Etsy test track (Rain, Barely there/Subliminal, 5 mi
 ## Decisions
 
 - "Unlimited tracks" is fine in customer copy. The 3 a day limit is fair use and is covered in the terms, so don't flag the wording again.
+
+## Daily view sentence in the planner emails (option B), still to finish
+
+Done so far: the sentence is in the TEST Etsy copy (7881500, module 61). The 4 live emails are not changed yet, because the daily view pages aren't uploaded yet.
+
+After uploading the "planner daily view" zip and purging, add the sentence by hand in Make. Open each module, click into the email body, and paste the sentence straight after the anchor text:
+
+- Etsy Orders 7001679, module 61 "Email the buyer their planner link", and website 7855490, module 10. After "It takes about a minute, and you can download the PDF straight away." paste:
+  ` When it’s ready, you can also open a daily view on your phone. It shows one day at a time, and you tap a star each day you do it.`
+- Gift emails 7860456 module 7 and 7868986 module 7. After "You can print your planner, or keep it on your phone or computer and tick things off on screen." paste:
+  ` When it’s ready, you can also open a daily view on your phone, which shows one day at a time and lets you tap a star each day you do it.`
+
+Save each scenario. The scratch scenarios and scratch records have been deleted. The Make API key in the keychain can only read designs, not save them, so a Make HTTP module can't do these edits.
