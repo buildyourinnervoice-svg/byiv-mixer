@@ -229,3 +229,5 @@ Save each scenario. The scratch scenarios and scratch records have been deleted.
 /planner/ reused a cached membership check (12 hours), so a sport member could see the general examples. It now always checks fresh (`byivCheck(key, true)`), the same as /my/. Live and checked.
 
 The "same task every day" report was a test email link (dummy text "Test day N: ..."), not a real planner. Not a bug.
+
+The "Have you tried anything before?" question is hidden on /planner/ and /planner-gift/ (12 Oct). It's still in the page with display:none, because the sport "which day do you play" field is inserted after it. Its value is now always empty. Live and checked.
