@@ -249,39 +249,63 @@ function subliminalVoiceDb(bg) {
   for (const s of SUBLIMINAL_VOICE_LEVELS) { if (s.re.test(String(bg))) return s.db; }
   return '-30dB';
 }
-// ---- SUBLIMINAL RAIN (10 Oct 2026, owner listening tests) -----------------
-// The shared chain below squashes the bed with acompressor, which turned rain
-// into a flat, constant hiss on Subliminal ("it just sounds like a loud hiss
-// all the way through"). Subliminal + rain now gets its own chain:
-//   - no compressor, so the rain keeps its natural movement
-//   - top end softened (high shelf -9dB at 2.5kHz, lowpass 6.5kHz)
-//   - much quieter: about -41 LUFS instead of about -28
-//   - slow, gentle rises (RAIN_SWELL): quiet most of the time, rising by up to
-//     about 4dB now and then. Cycles of 53s and 113s, independent of the bed
-//     loop, so long tracks never line up the same way twice.
-//   - the hidden voice follows the same rises at a fixed distance below the
-//     rain. Measured on separate stems it sits at least as far under the rain
-//     as the old chain in every speech band (280-4500, 500-2000, 2500-4500 Hz).
-// Whispered, Clear, thunderstorm and every other sound are unchanged.
-// The softened rain no longer covers the voice's "s" and "sh" sounds, which
-// poked through as a faint on-and-off ringing. The voice is cut much harder
-// above 2.2kHz (24dB/octave) so that, checked moment by moment in 1/3-octave
-// bands, it never comes within 10dB of the rain.
+// ---- RAIN (10-11 Oct 2026, owner listening tests) --------------------------
+// Rain was the worst background: the old chain squashed it into a flat,
+// constant hiss ("it just sounds like a loud hiss all the way through").
+// Rain now gets its own treatment at every volume:
+//   - RAIN_SOFT takes the harsh top off (high shelf -12dB at 1.8kHz, lowpass
+//     4.5kHz) and adds a little warmth (+4dB at 300Hz). Clear and Whispered
+//     keep the shared chain with this added after the levelling.
+//   - Subliminal rain: no compressor, about -45 LUFS, and slow gentle rises
+//     (RAIN_SWELL, cycles of 53s and 113s, independent of the bed loop so long
+//     tracks never line up the same way twice). The hidden voice follows the
+//     same rises and is cut above 2.2kHz, because the softened rain no longer
+//     covers its "s" sounds (they poked through as a faint ringing). Checked
+//     moment by moment in 1/3-octave bands it stays at least 17dB under the rain.
+// The rain file itself was also repaired: it was a patchwork of 30 second
+// loops with audible joins (see buildRepairedRain).
+// Thunderstorm is not treated as rain.
+const RAIN_SOFT = 'highshelf=f=1800:g=-12,lowpass=f=4500:poles=2,lowpass=f=4500:poles=2,lowshelf=f=300:g=4';
 const RAIN_VOICE_FILTER = 'highpass=f=280:poles=2,lowpass=f=2200:poles=2,lowpass=f=2200:poles=2,acompressor=threshold=0.02:ratio=4:attack=12:release=250';
 const RAIN_SWELL = "volume=eval=frame:volume='pow(10,(-9+4*pow(max(0,sin(2*PI*t/113)),3)+2*pow(max(0,sin(2*PI*t/53+2.1)),3))/20)'";
+function isRain(background) {
+  return /rain/i.test(String(background)) && !/thunder|storm/i.test(String(background));
+}
 function isSubliminalRain(volume, background) {
-  return volume === 'None (Subliminal only)' && /rain/i.test(String(background)) && !/thunder|storm/i.test(String(background));
+  return volume === 'None (Subliminal only)' && isRain(background);
 }
 // Filter graph for Subliminal rain: [bg0] is the rain bed, [1:a] the voice.
 // withVoice=false renders the bed alone (sound previews).
 function subliminalRainFilter(withVoice, fadeStart, fadeSecs) {
-  const bed = `[bg0]loudnorm=I=-23:TP=-2:LRA=20,highshelf=f=2500:g=-9,lowpass=f=6500,volume=-8dB,${RAIN_SWELL}[bg];`;
+  const bed = `[bg0]loudnorm=I=-23:TP=-2:LRA=20,${RAIN_SOFT},volume=-8dB,${RAIN_SWELL}[bg];`;
   const end = fadeSecs ? `alimiter=limit=0.95,afade=t=out:st=${fadeStart}:d=${fadeSecs}[out]` : 'alimiter=limit=0.95[out]';
   if (!withVoice) return bed + `[bg]${end}`;
   return bed +
-    `[1:a]loudnorm=I=-19:TP=-2:LRA=11,apad=pad_dur=2,volume=-44dB,${RAIN_VOICE_FILTER},` +
+    `[1:a]loudnorm=I=-19:TP=-2:LRA=11,apad=pad_dur=2,volume=-74dB,${RAIN_VOICE_FILTER},` +
     `aloop=loop=-1:size=2147483647,${RAIN_SWELL},volume=3dB[v];` +
     `[bg][v]amix=inputs=2:duration=first:normalize=0,${end}`;
+}
+// The one place the track filter graph is built. /mix and the website sample
+// builder both use it, so a sample always sounds exactly like a real track.
+// Inputs: [bg0] the background, [1:a] the voice. Output: [out].
+function mixFilterChain(volume, background, fadeStart, fadeSecs) {
+  if (isSubliminalRain(volume, background)) return subliminalRainFilter(true, fadeStart, fadeSecs);
+  const levels = MIX_LEVELS[volume];
+  const isSubliminal = volume === 'None (Subliminal only)';
+  const voiceDb = isSubliminal ? subliminalVoiceDb(background) : (volume === 'A little (Whispered)' && /binaural/i.test(String(background)) ? '-26dB' : levels.voice);
+  const voiceComp = isSubliminal ? SUBLIMINAL_VOICE_COMP : '';
+  const duckThresh = isSubliminal ? 1 : 0.05;
+  const soft = isRain(background) ? `,${RAIN_SOFT}` : '';
+  return `[bg0]loudnorm=I=-23:TP=-2:LRA=11${soft}[bgn];` +
+    `[bgn]volume=${levels.bg}[bgv];` +
+    `[bgv]acompressor=threshold=0.0316:ratio=6:attack=8:release=220[bgc];` +
+    `[1:a]loudnorm=I=-19:TP=-2:LRA=11,apad=pad_dur=2,volume=${voiceDb}${voiceComp}[padded];` +
+    `[padded]aloop=loop=-1:size=2147483647[voiceloop];` +
+    `[voiceloop]asplit=2[voicemix][voicekey];` +
+    `[bgc][voicekey]sidechaincompress=threshold=${duckThresh}:ratio=2.5:attack=20:release=250[bgducked];` +
+    `[bgducked][voicemix]amix=inputs=2:duration=first:normalize=0[mix];` +
+    `[mix]alimiter=limit=0.95[limited];` +
+    `[limited]afade=t=out:st=${fadeStart}:d=${fadeSecs}[out]`;
 }
 // Light compression on the subliminal voice only: evens out word peaks so no
 // syllable pokes above the masking bed.
@@ -765,17 +789,7 @@ app.post('/mix', requireMakeSecret, async (req, res) => {
       // tracks.
       const fadeSecs = 6;
       const fadeStart = Math.max(0, durationSecs - fadeSecs);
-      const filterChain = isSubliminalRain(volume, background) ? subliminalRainFilter(true, fadeStart, fadeSecs) :
-        `[bg0]loudnorm=I=-23:TP=-2:LRA=11[bgn];` +
-        `[bgn]volume=${levels.bg}[bgv];` +
-        `[bgv]acompressor=threshold=0.0316:ratio=6:attack=8:release=220[bgc];` +
-        `[1:a]loudnorm=I=-19:TP=-2:LRA=11,apad=pad_dur=2,volume=${voiceDb}${voiceComp}[padded];` +
-        `[padded]aloop=loop=-1:size=2147483647[voiceloop];` +
-        `[voiceloop]asplit=2[voicemix][voicekey];` +
-        `[bgc][voicekey]sidechaincompress=threshold=${duckThresh}:ratio=2.5:attack=20:release=250[bgducked];` +
-        `[bgducked][voicemix]amix=inputs=2:duration=first:normalize=0[mix];` +
-        `[mix]alimiter=limit=0.95[limited];` +
-        `[limited]afade=t=out:st=${fadeStart}:d=${fadeSecs}[out]`;
+      const filterChain = mixFilterChain(volume, background, fadeStart, fadeSecs);
       let ffArgs;
       if (noiseColour) {
         ffArgs = [
@@ -1415,7 +1429,237 @@ app.post('/concatenate', requireMakeSecret, async (req, res) => {
   }
 });
 app.get('/health', (req, res) => res.json({ status: 'ok', stripe: !!stripe }));
+// ===========================================================================
+// WEBSITE SAMPLE BUILDER (added 11 Oct 2026)
+//
+// Builds every "Hear ... at this volume" sample for the website in one job,
+// using mixFilterChain(), the same filter graph as /mix, so a sample sounds
+// exactly like a real track. The words are in samples/sample-affirmations.json
+// (5 lines per focus area plus sport) and are spoken with the same voice,
+// settings, 0.9s lead in and 1.7s gaps as real orders.
+//
+//   POST /admin/build-samples   (X-Admin-Secret, sent by Make's stored key)
+//   { "sounds": ["ocean-waves"],   optional, default all 9
+//     "focus": ["sleep"],          optional, default all 13
+//     "rebuild_voices": false,     re-speak the words (costs ElevenLabs)
+//     "repair_rain": false,        rebuild backgrounds/v2/gentle-rain.mp3
+//     "home": true, "sound_previews": true }
+//
+// Output on the CDN:
+//   samples/v2/<focus>/<sound>-<full|whispered|subliminal>.mp3  (builder step 5)
+//   samples/v2/sound-<sound>.mp3                                 (builder step 4)
+//   samples/v2/home/<full|whispered|subliminal>.mp3               (homepage)
+//   samples/v2/voices/<focus>.mp3                                 (kept so a
+//     rebuild of one sound costs nothing in ElevenLabs)
+//   samples/v2/report.json                                        (progress)
+// The job replies at once and runs in the background. One job at a time.
+// To refresh one sound later (say a new ocean file): {"sounds":["ocean-waves"]}.
+// ===========================================================================
+const SAMPLE_SOUNDS = ['gentle-rain', 'ocean-waves', 'forest-sounds', 'stream-brook', 'ambient-meditation',
+  'binaural-beats', 'white-noise', 'pink-noise', 'no-background'];
+const SAMPLE_TIERS = { full: 'Fully (Clear voice)', whispered: 'A little (Whispered)', subliminal: 'None (Subliminal only)' };
+let sampleJobRunning = false;
+
+function bunnyRequest(method, remotePath, body, contentType) {
+  return new Promise((resolve) => {
+    const headers = { 'AccessKey': BUNNY_API_KEY };
+    if (body) { headers['Content-Type'] = contentType || 'application/octet-stream'; headers['Content-Length'] = body.length; }
+    const r = https.request({ hostname: BUNNY_STORAGE_URL, path: `/${BUNNY_STORAGE_ZONE}/${remotePath}`, method, headers }, (resp) => {
+      const chunks = [];
+      resp.on('data', c => chunks.push(c));
+      resp.on('end', () => resolve({ status: resp.statusCode, body: Buffer.concat(chunks) }));
+    });
+    r.on('error', () => resolve({ status: 0, body: Buffer.alloc(0) }));
+    if (body) r.write(body);
+    r.end();
+  });
+}
+async function bunnyFetchTo(remotePath, dest) {
+  const r = await bunnyRequest('GET', remotePath);
+  if (r.status !== 200 || r.body.length < 1000) return false;
+  fs.writeFileSync(dest, r.body);
+  return true;
+}
+
+// Speak a list of lines exactly as /reset-audio does for real orders.
+async function speakLinesTo(lines, cfg, tmpDir, outPath) {
+  const parts = [];
+  if (cfg.lead_in > 0) parts.push({ silence: cfg.lead_in });
+  for (let i = 0; i < lines.length; i++) {
+    const opts = { text: lines[i], voice_id: cfg.voice_id, model_id: cfg.model_id, voice_settings: cfg.voice_settings,
+      previous_text: (cfg.continuity === 'previous' && i > 0) ? lines[i - 1] : '', next_text: '' };
+    let buf = null, lastErr = null;
+    for (let attempt = 1; attempt <= 2 && !buf; attempt++) {
+      try { buf = await speakLine(opts); } catch (e) { lastErr = e; }
+    }
+    if (!buf) throw lastErr;
+    const clip = path.join(tmpDir, `sline-${i}.mp3`);
+    fs.writeFileSync(clip, buf);
+    parts.push({ file: clip });
+    parts.push({ silence: cfg.gap });
+  }
+  return joinParts(parts, outPath, tmpDir);
+}
+
+// The rain file was a patchwork of 30 second loops with a hard join every
+// 30 seconds (found 11 Oct 2026, Sylvia heard them). These are the joins,
+// in seconds, in the original 600 second file. Each stretch between joins is
+// kept, 0.15s is trimmed from each side of a join, and neighbours are blended
+// with a 2 second equal power crossfade, so nothing else in the rain changes.
+const RAIN_JOINS = [20.17, 50.17, 80.17, 110.17, 137.13, 140.17, 147.05, 167.13, 169.06, 177.05, 197.13, 199.06,
+  207.05, 237.3, 267.3, 297.3, 347.64, 367.71, 377.64, 397.71, 407.64, 427.71, 437.64, 457.71, 467.64, 487.71,
+  497.64, 517.71, 527.64, 547.71];
+async function buildRepairedRain(tmpDir, log) {
+  const orig = path.join(tmpDir, 'rain-original.mp3');
+  const backupPath = 'backgrounds/v2/gentle-rain-original.mp3';
+  // Always repair from the untouched original, so running this twice is safe.
+  if (!(await bunnyFetchTo(backupPath, orig))) {
+    await downloadFile(`${CDN_BASE}/backgrounds/v2/gentle-rain.mp3`, orig);
+    const len = await ffprobeDuration(orig);
+    if (Math.abs(len - 600) > 2) throw new Error(`Rain file is ${len}s, expected the original 600s. Not repairing.`);
+    const up = await bunnyRequest('PUT', backupPath, fs.readFileSync(orig), 'audio/mpeg');
+    if (up.status !== 201) throw new Error(`Could not back up the original rain (${up.status})`);
+    log('original rain backed up to ' + backupPath);
+  }
+  const L = await ffprobeDuration(orig);
+  const b = [0, ...RAIN_JOINS, L];
+  const segs = [];
+  for (let i = 0; i < b.length - 1; i++) if (b[i + 1] - b[i] > 5) segs.push([b[i] + (i ? 0.15 : 0), b[i + 1] - (i < b.length - 2 ? 0.15 : 0)]);
+  let g = `[0:a]asplit=${segs.length}` + segs.map((_, i) => `[s${i}]`).join('') + ';';
+  segs.forEach(([a, c], i) => { g += `[s${i}]atrim=start=${a.toFixed(3)}:end=${c.toFixed(3)},asetpts=PTS-STARTPTS[p${i}];`; });
+  let prev = 'p0';
+  for (let i = 1; i < segs.length; i++) { const o = i === segs.length - 1 ? 'out' : `x${i}`; g += `[${prev}][p${i}]acrossfade=d=2:c1=qsin:c2=qsin[${o}];`; prev = o; }
+  const out = path.join(tmpDir, 'rain-repaired.mp3');
+  await runFfmpeg(['-i', orig, '-filter_complex', g.replace(/;$/, ''), '-map', '[out]', '-c:a', 'libmp3lame', '-b:a', '256k', out, '-y']);
+  const outLen = await ffprobeDuration(out);
+  if (outLen < 400) throw new Error(`Repaired rain came out ${outLen}s, expected about 528s`);
+  const up = await bunnyRequest('PUT', 'backgrounds/v2/gentle-rain.mp3', fs.readFileSync(out), 'audio/mpeg');
+  if (up.status !== 201) throw new Error(`Could not upload the repaired rain (${up.status})`);
+  await bunnyRequest('DELETE', 'preview-cache/gentle-rain.mp3');
+  log(`rain repaired: ${segs.length} stretches, ${Math.round(outLen)}s, uploaded`);
+}
+
+// Render one sample with the real track chain. voicePath may be null for a
+// background-only preview. The background starts 60s in, so a sample is not
+// just the opening seconds of the recording.
+async function renderSample({ sound, volume, voicePath, bgPath, secs, outPath }) {
+  const bgUrl = `${CDN_BASE}/backgrounds/v2/${sound}.mp3`;
+  const noise = /pink-noise/i.test(sound) ? 'pink' : /white-noise/i.test(sound) ? 'white' : null;
+  const inputs = [];
+  if (noise) inputs.push('-f', 'lavfi', '-i', `anoisesrc=colour=${noise}:sample_rate=44100:amplitude=0.35:seed=1,aformat=channel_layouts=mono`);
+  else {
+    const len = await ffprobeDuration(bgPath);
+    if (len > secs + 70) inputs.push('-ss', '60');
+    inputs.push('-stream_loop', '-1', '-i', bgPath);
+  }
+  const head = noise ? '[0:a]pan=stereo|c0=c0|c1=c0[bg0];' : '[0:a]anull[bg0];';
+  const fadeSecs = 1.5, fadeStart = Math.max(0, secs - fadeSecs);
+  let graph;
+  if (voicePath) {
+    inputs.push('-i', voicePath);
+    graph = head + mixFilterChain(volume, bgUrl, fadeStart, fadeSecs);
+  } else if (isSubliminalRain(volume, bgUrl)) {
+    graph = head + subliminalRainFilter(false, fadeStart, fadeSecs);
+  } else {
+    // background on its own, levelled the way the Subliminal chain levels it
+    graph = head + `[bg0]loudnorm=I=-23:TP=-2:LRA=11,volume=0dB,acompressor=threshold=0.0316:ratio=6:attack=8:release=220,` +
+      `alimiter=limit=0.95,afade=t=out:st=${fadeStart}:d=${fadeSecs}[out]`;
+  }
+  await runFfmpeg([...inputs, '-filter_complex', graph, '-map', '[out]', '-t', String(secs),
+    '-ar', '44100', '-c:a', 'libmp3lame', '-b:a', '160k', outPath, '-y']);
+}
+
+app.post('/admin/build-samples', requireMakeSecret, async (req, res) => {
+  if (sampleJobRunning) return res.status(409).json({ success: false, error: 'A sample build is already running.' });
+  const body = req.body || {};
+  const spec = JSON.parse(fs.readFileSync(path.join(__dirname, 'samples', 'sample-affirmations.json'), 'utf8'));
+  const sounds = (Array.isArray(body.sounds) && body.sounds.length ? body.sounds : SAMPLE_SOUNDS).filter(s => SAMPLE_SOUNDS.includes(s));
+  const focusKeys = (Array.isArray(body.focus) && body.focus.length ? body.focus : Object.keys(spec.focus)).filter(k => spec.focus[k]);
+  sampleJobRunning = true;
+  res.json({ success: true, status: 'started', sounds, focus: focusKeys });
+
+  const tmpDir = `/tmp/samples-${Date.now()}`;
+  fs.mkdirSync(tmpDir, { recursive: true });
+  const report = { started: new Date().toISOString(), done: 0, failed: [], log: [], files: [] };
+  const log = (m) => { console.log('[samples]', m); report.log.push(m); };
+  const saveReport = () => bunnyRequest('PUT', 'samples/v2/report.json', Buffer.from(JSON.stringify(report, null, 1)), 'application/json');
+  try {
+    if (body.repair_rain) await buildRepairedRain(tmpDir, log);
+
+    // voices: reuse what is on the CDN unless asked to re-speak
+    const voices = {};
+    for (const k of focusKeys) {
+      const vp = path.join(tmpDir, `voice-${k}.mp3`);
+      const remote = `samples/v2/voices/${k}.mp3`;
+      if (body.rebuild_voices || !(await bunnyFetchTo(remote, vp))) {
+        const vdir = path.join(tmpDir, `v-${k}`); fs.mkdirSync(vdir);
+        await speakLinesTo(spec.focus[k].lines, spec.voice, vdir, vp);
+        const up = await bunnyRequest('PUT', remote, fs.readFileSync(vp), 'audio/mpeg');
+        if (up.status !== 201) throw new Error(`voice upload failed for ${k} (${up.status})`);
+        log(`voice spoken: ${k}`);
+      }
+      voices[k] = vp;
+    }
+    await saveReport();
+
+    const beds = {};
+    for (const s of sounds) {
+      if (/noise/.test(s)) continue;
+      beds[s] = path.join(tmpDir, `bed-${s}.mp3`);
+      await downloadFile(`${CDN_BASE}/backgrounds/v2/${s}.mp3?v=${Date.now()}`, beds[s]);
+    }
+    const put = async (local, remote) => {
+      const up = await bunnyRequest('PUT', remote, fs.readFileSync(local), 'audio/mpeg');
+      if (up.status !== 201) throw new Error(`upload ${remote} failed (${up.status})`);
+      report.files.push(remote); report.done++;
+    };
+    const one = async (args, remote) => {
+      try { await renderSample(args); await put(args.outPath, remote); }
+      catch (e) { report.failed.push({ file: remote, error: e.message }); log(`FAILED ${remote}: ${e.message}`); }
+    };
+
+    for (const s of sounds) {
+      if (body.sound_previews !== false) {
+        await one({ sound: s, volume: SAMPLE_TIERS.subliminal, voicePath: null, bgPath: beds[s], secs: 10,
+          outPath: path.join(tmpDir, 'out.mp3') }, `samples/v2/sound-${s}.mp3`);
+      }
+      for (const k of focusKeys) {
+        const vlen = await ffprobeDuration(voices[k]);
+        for (const [tier, volume] of Object.entries(SAMPLE_TIERS)) {
+          if (s === 'no-background' && tier === 'subliminal') continue; // the website hides this card
+          await one({ sound: s, volume, voicePath: voices[k], bgPath: beds[s], secs: Math.ceil(vlen + 0.5),
+            outPath: path.join(tmpDir, 'out.mp3') }, `samples/v2/${k}/${s}-${tier}.mp3`);
+        }
+      }
+      log(`sound done: ${s}`);
+      await saveReport();
+    }
+
+    if (body.home !== false && spec.home) {
+      for (const [tier, h] of Object.entries(spec.home)) {
+        if (!voices[h.focus]) continue;
+        let bed = beds[h.sound];
+        if (!bed && !/noise/.test(h.sound)) { bed = path.join(tmpDir, `bed-${h.sound}.mp3`); await downloadFile(`${CDN_BASE}/backgrounds/v2/${h.sound}.mp3`, bed); }
+        const vlen = await ffprobeDuration(voices[h.focus]);
+        await one({ sound: h.sound, volume: SAMPLE_TIERS[tier], voicePath: voices[h.focus], bgPath: bed, secs: Math.ceil(vlen + 0.5),
+          outPath: path.join(tmpDir, 'out.mp3') }, `samples/v2/home/${tier}.mp3`);
+      }
+    }
+    report.finished = new Date().toISOString();
+    log(`finished: ${report.done} files, ${report.failed.length} failed`);
+  } catch (e) {
+    report.error = e.message; log('JOB ERROR: ' + e.message);
+  } finally {
+    await saveReport();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    sampleJobRunning = false;
+  }
+});
+app.get('/version', (req, res) => res.json({ build: '2026-10-11 samples-v2 rain-soft' }));
 const server = app.listen(3000, () => console.log('BYIV Mixer + Checkout running on port 3000'));
 server.requestTimeout = 0;
 server.headersTimeout = 65000;
 server.keepAliveTimeout = 65000;
+
+// exported only so the sample and mix filters can be tested locally
+module.exports = { mixFilterChain, subliminalRainFilter, renderSample, RAIN_JOINS };

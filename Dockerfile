@@ -9,6 +9,7 @@ COPY package.json ./
 RUN npm install
 
 COPY index.js ./
+COPY samples ./samples
 
 EXPOSE 3000
 
