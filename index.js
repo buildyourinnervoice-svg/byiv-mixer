@@ -1103,7 +1103,9 @@ const RESET_DEFAULTS = {
 
 // Context and pace for the first line only (see /reset-audio).
 const STEADY_START_CONTEXT = 'Take a slow, easy breath in, and let it out gently. Settle in, there is no rush.';
-const STEADY_START_SPEED = 0.88;
+// 0.88 (13 Oct) made line 1 too slow by ear, so the calm context alone now
+// sets the pace. "steady_start_speed" in the request can still override it.
+const STEADY_START_SPEED = 1;
 
 const CONCAT_MAX_PARTS = 200;
 const CONCAT_MAX_SILENCE = 60;          // seconds, per gap
@@ -1342,7 +1344,7 @@ app.post('/reset-audio', requireMakeSecret, async (req, res) => {
       // slightly slower speed. Send "steady_start": false to turn this off.
       const steady = i === 0 && usePrev && body.steady_start !== false;
       const lineSettings = steady
-        ? Object.assign({}, voice_settings, { speed: Math.max(0.7, Number(voice_settings.speed || 1) * STEADY_START_SPEED) })
+        ? Object.assign({}, voice_settings, { speed: Math.max(0.7, Number(voice_settings.speed || 1) * (isFinite(Number(body.steady_start_speed)) && Number(body.steady_start_speed) > 0 ? Number(body.steady_start_speed) : STEADY_START_SPEED)) })
         : voice_settings;
       const opts = {
         text, voice_id, model_id, voice_settings: lineSettings,
