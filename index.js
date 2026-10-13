@@ -1101,6 +1101,10 @@ const RESET_DEFAULTS = {
   }
 };
 
+// Context and pace for the first line only (see /reset-audio).
+const STEADY_START_CONTEXT = 'Take a slow, easy breath in, and let it out gently. Settle in, there is no rush.';
+const STEADY_START_SPEED = 0.88;
+
 const CONCAT_MAX_PARTS = 200;
 const CONCAT_MAX_SILENCE = 60;          // seconds, per gap
 const CONCAT_MAX_TOTAL_SECS = 3600;
@@ -1331,9 +1335,18 @@ app.post('/reset-audio', requireMakeSecret, async (req, res) => {
     if (isFinite(leadIn) && leadIn > 0) parts.push({ silence: Math.min(leadIn, 10) });
     for (let i = 0; i < lines.length; i++) {
       const text = String(lines[i].text).trim();
+      // 13 Oct 2026: the first line came out rushed. Measured on a delivered
+      // track, line 1 ran at about 6.5 syllables a second against about 4.5
+      // for the rest, because ElevenLabs had nothing before it to set the pace.
+      // So line 1 now gets a calm sentence as context (not spoken) and a
+      // slightly slower speed. Send "steady_start": false to turn this off.
+      const steady = i === 0 && usePrev && body.steady_start !== false;
+      const lineSettings = steady
+        ? Object.assign({}, voice_settings, { speed: Math.max(0.7, Number(voice_settings.speed || 1) * STEADY_START_SPEED) })
+        : voice_settings;
       const opts = {
-        text, voice_id, model_id, voice_settings,
-        previous_text: (usePrev && i > 0) ? String(lines[i - 1].text).trim() : '',
+        text, voice_id, model_id, voice_settings: lineSettings,
+        previous_text: steady ? STEADY_START_CONTEXT : ((usePrev && i > 0) ? String(lines[i - 1].text).trim() : ''),
         next_text: (useNext && i < lines.length - 1) ? String(lines[i + 1].text).trim() : ''
       };
 
