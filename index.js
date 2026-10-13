@@ -1103,9 +1103,9 @@ const RESET_DEFAULTS = {
 
 // Context and pace for the first line only (see /reset-audio).
 const STEADY_START_CONTEXT = 'Take a slow, easy breath in, and let it out gently. Settle in, there is no rush.';
-// 0.88 (13 Oct) made line 1 too slow by ear, so the calm context alone now
-// sets the pace. "steady_start_speed" in the request can still override it.
-const STEADY_START_SPEED = 1;
+// 0.88 (13 Oct) made line 1 too slow by ear. Sylvia chose 0.95 after
+// listening to 1 and 0.95. "steady_start_speed" in a request overrides it.
+const STEADY_START_SPEED = 0.95;
 
 const CONCAT_MAX_PARTS = 200;
 const CONCAT_MAX_SILENCE = 60;          // seconds, per gap
