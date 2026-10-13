@@ -1045,7 +1045,9 @@ app.get('/preview', async (req, res) => {
       '-filter_complex', filter,
       '-map', '[out]',
       '-t', String(secs),
-      '-c:a', 'libmp3lame', '-b:a', '192k',
+      // &kbps=256 or 320 (13 Oct 2026): to hear whether noise beds sound
+      // glitchy because of MP3 compression. Tracks are still 192k.
+      '-c:a', 'libmp3lame', '-b:a', (['256', '320'].includes(String(req.query.kbps)) ? String(req.query.kbps) : '192') + 'k',
       '-f', 'mp3', 'pipe:1'
     ];
     const proc = spawn('ffmpeg', args);
