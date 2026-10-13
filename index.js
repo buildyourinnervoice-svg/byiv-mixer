@@ -275,6 +275,7 @@ const RAIN_SOFT = 'highshelf=f=1800:g=-12,lowpass=f=4500:poles=2,lowpass=f=4500:
 // Used by /mix (and so the website samples) at Clear and Whispered since 13 Oct
 // 2026. /preview still applies it only when &soft=1 is given.
 const BRIGHT_SOFT = 'highshelf=f=2000:g=-8,lowpass=f=7000:poles=2';
+const PINK_STEADY = 'highpass=f=80:poles=2';
 function isBrightBed(background) {
   return /stream|brook|pink|white|forest/i.test(String(background));
 }
@@ -1008,10 +1009,16 @@ app.get('/preview', async (req, res) => {
     const bedSoft = String(req.query.soft || '') === '1'
       ? (isRain(sound) ? `,${RAIN_SOFT}` : (isBrightBed(sound) ? `,${BRIGHT_SOFT}` : ''))
       : '';
+    // &steady=1 (13 Oct 2026, test only): Pink noise sounded 'up and down'.
+    // Its deep bass rises and falls, and the fast compressor rides those
+    // rises. This trims the rumble below 80Hz on pink and skips the
+    // compressor on generated noise, which is already perfectly even.
+    const steadyNoise = !!colour && String(req.query.steady || '') === '1';
+    const steadyHp = steadyNoise && colour === 'pink' ? ',' + PINK_STEADY : '';
     const bgLabel = (colour ? '[0:a]pan=stereo|c0=c0|c1=c0[bg0];' : '[0:a]anull[bg0];') +
-      `[bg0]loudnorm=I=-23:TP=-2:LRA=11${bedSoft}[bgn];` +
+      `[bg0]loudnorm=I=-23:TP=-2:LRA=11${bedSoft}${steadyHp}[bgn];` +
       `[bgn]volume=${bgvol}[bgv];` +
-      `[bgv]acompressor=threshold=0.0316:ratio=6:attack=8:release=220[bg];`;
+      (steadyNoise ? `[bgv]anull[bg];` : `[bgv]acompressor=threshold=0.0316:ratio=6:attack=8:release=220[bg];`);
     let filter, extraInputs = [];
     // Subliminal rain uses its own chain (see subliminalRainFilter), unless a
     // raw-dB override was given for testing.
