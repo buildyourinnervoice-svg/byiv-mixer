@@ -272,8 +272,8 @@ const RAIN_SOFT = 'highshelf=f=1800:g=-12,lowpass=f=4500:poles=2,lowpass=f=4500:
 // samples, the Whispered voice rose only 1.7 to 6 dB above these beds in that
 // range (rain 11 dB, ambient 14 dB), so the words lost their edges. This takes
 // the hiss off the top of those beds, the same idea as RAIN_SOFT but gentler.
-// For now it is only used by /preview when &soft=1 is given, so the owner can
-// compare before and after. It is NOT yet used by /mix.
+// Used by /mix (and so the website samples) at Clear and Whispered since 13 Oct
+// 2026. /preview still applies it only when &soft=1 is given.
 const BRIGHT_SOFT = 'highshelf=f=2000:g=-8,lowpass=f=7000:poles=2';
 function isBrightBed(background) {
   return /stream|brook|pink|white|forest/i.test(String(background));
@@ -307,7 +307,10 @@ function mixFilterChain(volume, background, fadeStart, fadeSecs) {
   const voiceDb = isSubliminal ? subliminalVoiceDb(background) : (volume === 'A little (Whispered)' && /binaural/i.test(String(background)) ? '-26dB' : levels.voice);
   const voiceComp = isSubliminal ? SUBLIMINAL_VOICE_COMP : '';
   const duckThresh = isSubliminal ? 1 : 0.05;
-  const soft = isRain(background) ? `,${RAIN_SOFT}` : '';
+  // Rain always gets RAIN_SOFT. Stream, noise and forest get BRIGHT_SOFT at Clear
+  // and Whispered (approved by Sylvia 13 Oct 2026 after a before/after listen);
+  // Subliminal keeps the full bed, since there the bed is what hides the voice.
+  const soft = isRain(background) ? `,${RAIN_SOFT}` : ((!isSubliminal && isBrightBed(background)) ? `,${BRIGHT_SOFT}` : '');
   return `[bg0]loudnorm=I=-23:TP=-2:LRA=11${soft}[bgn];` +
     `[bgn]volume=${levels.bg}[bgv];` +
     `[bgv]acompressor=threshold=0.0316:ratio=6:attack=8:release=220[bgc];` +
