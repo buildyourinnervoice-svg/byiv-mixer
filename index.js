@@ -266,6 +266,18 @@ function subliminalVoiceDb(bg) {
 // loops with audible joins (see buildRepairedRain).
 // Thunderstorm is not treated as rain.
 const RAIN_SOFT = 'highshelf=f=1800:g=-12,lowpass=f=4500:poles=2,lowpass=f=4500:poles=2,lowshelf=f=300:g=4';
+// ---- BRIGHT BEDS (13 Oct 2026, owner report: whisper over stream sounded muffled) ----
+// Stream & brook, pink/white noise and forest carry most of their energy in the
+// 1 to 8 kHz range, where the consonants of speech live. Measured on the website
+// samples, the Whispered voice rose only 1.7 to 6 dB above these beds in that
+// range (rain 11 dB, ambient 14 dB), so the words lost their edges. This takes
+// the hiss off the top of those beds, the same idea as RAIN_SOFT but gentler.
+// For now it is only used by /preview when &soft=1 is given, so the owner can
+// compare before and after. It is NOT yet used by /mix.
+const BRIGHT_SOFT = 'highshelf=f=2000:g=-8,lowpass=f=7000:poles=2';
+function isBrightBed(background) {
+  return /stream|brook|pink|white|forest/i.test(String(background));
+}
 const RAIN_VOICE_FILTER = 'highpass=f=280:poles=2,lowpass=f=2200:poles=2,lowpass=f=2200:poles=2,acompressor=threshold=0.02:ratio=4:attack=12:release=250';
 const RAIN_SWELL = "volume=eval=frame:volume='pow(10,(-9+4*pow(max(0,sin(2*PI*t/113)),3)+2*pow(max(0,sin(2*PI*t/53+2.1)),3))/20)'";
 function isRain(background) {
@@ -988,8 +1000,13 @@ app.get('/preview', async (req, res) => {
       inputArgs = ['-stream_loop', '-1', '-i', loopInput];
       }
     // Same background conditioning as /mix: loudnorm -> tier offset -> light compressor.
+    // &soft=1 (13 Oct 2026): soften the top of the bed, RAIN_SOFT for rain and
+    // BRIGHT_SOFT for stream, noise and forest, to compare before and after.
+    const bedSoft = String(req.query.soft || '') === '1'
+      ? (isRain(sound) ? `,${RAIN_SOFT}` : (isBrightBed(sound) ? `,${BRIGHT_SOFT}` : ''))
+      : '';
     const bgLabel = (colour ? '[0:a]pan=stereo|c0=c0|c1=c0[bg0];' : '[0:a]anull[bg0];') +
-      `[bg0]loudnorm=I=-23:TP=-2:LRA=11[bgn];` +
+      `[bg0]loudnorm=I=-23:TP=-2:LRA=11${bedSoft}[bgn];` +
       `[bgn]volume=${bgvol}[bgv];` +
       `[bgv]acompressor=threshold=0.0316:ratio=6:attack=8:release=220[bg];`;
     let filter, extraInputs = [];
