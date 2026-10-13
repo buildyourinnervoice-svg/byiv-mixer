@@ -276,6 +276,14 @@ const RAIN_SOFT = 'highshelf=f=1800:g=-12,lowpass=f=4500:poles=2,lowpass=f=4500:
 // 2026. /preview still applies it only when &soft=1 is given.
 const BRIGHT_SOFT = 'highshelf=f=2000:g=-8,lowpass=f=7000:poles=2';
 const PINK_STEADY = 'highpass=f=80:poles=2';
+// Fixed trims that replace the bed compressor on generated noise at Subliminal.
+// Measured 13 Oct 2026: the compressor took about 6dB off pink and 4.5dB off
+// white at Subliminal, and did nothing at Clear or Whispered.
+const NOISE_SUBLIMINAL_TRIM = { pink: '-6dB', white: '-4.5dB' };
+function noiseBed(background) {
+  const b = String(background);
+  return /pink-noise/i.test(b) ? 'pink' : (/white-noise/i.test(b) ? 'white' : null);
+}
 function isBrightBed(background) {
   return /stream|brook|pink|white|forest/i.test(String(background));
 }
@@ -312,9 +320,19 @@ function mixFilterChain(volume, background, fadeStart, fadeSecs) {
   // and Whispered (approved by Sylvia 13 Oct 2026 after a before/after listen);
   // Subliminal keeps the full bed, since there the bed is what hides the voice.
   const soft = isRain(background) ? `,${RAIN_SOFT}` : ((!isSubliminal && isBrightBed(background)) ? `,${BRIGHT_SOFT}` : '');
-  return `[bg0]loudnorm=I=-23:TP=-2:LRA=11${soft}[bgn];` +
+  // Generated pink and white noise (13 Oct 2026, approved by ear): the fast
+  // compressor rode the random rises in the noise, so Pink noise sounded 'up
+  // and down'. Noise is already even, so it gets a fixed trim instead, set to
+  // land at the same level the compressor used to give. Pink also loses its
+  // deepest rumble (below 80Hz) before levelling.
+  const noise = noiseBed(background);
+  const preHp = noise === 'pink' ? `${PINK_STEADY},` : '';
+  const bedTame = noise
+    ? (isSubliminal ? `volume=${NOISE_SUBLIMINAL_TRIM[noise]}` : 'anull')
+    : 'acompressor=threshold=0.0316:ratio=6:attack=8:release=220';
+  return `[bg0]${preHp}loudnorm=I=-23:TP=-2:LRA=11${soft}[bgn];` +
     `[bgn]volume=${levels.bg}[bgv];` +
-    `[bgv]acompressor=threshold=0.0316:ratio=6:attack=8:release=220[bgc];` +
+    `[bgv]${bedTame}[bgc];` +
     `[1:a]loudnorm=I=-19:TP=-2:LRA=11,apad=pad_dur=2,volume=${voiceDb}${voiceComp}[padded];` +
     `[padded]aloop=loop=-1:size=2147483647[voiceloop];` +
     `[voiceloop]asplit=2[voicemix][voicekey];` +
