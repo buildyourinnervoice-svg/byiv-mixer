@@ -33,8 +33,17 @@ const PRICE = {
   '10 min': 9,
   '30 min': 13,
   '60 min': 16,
-   '4 hours': 20   // SLEEPtember. Put back to 25 when the offer ends.
+  '4 hours': 25
 };
+// 4 hour offer (25 Oct 2026): £20 through Menopause Awareness Month (Oct),
+// Long Nights (Nov) and Christmas (Dec). Ends automatically at midnight UK time
+// on 1 Jan 2027 (= 2027-01-01T00:00Z, GMT in winter), when it goes back to £25.
+// The website switches its offer wording on the same dates.
+const FOUR_HOUR_OFFER_ENDS = Date.parse('2027-01-01T00:00:00Z');
+Object.defineProperty(PRICE, '4 hours', {
+  enumerable: true,
+  get() { return Date.now() < FOUR_HOUR_OFFER_ENDS ? 20 : 25; }
+});
 // The wizard says "5 min" but the pipeline/mixer expect "5 minutes".
 const DURATION_NORMALISE = {
   '5 min': '5 minutes',
