@@ -184,3 +184,10 @@ Sylvia listened to the real Etsy test track (Rain, Barely there/Subliminal, 5 mi
 ## Decisions
 
 - "Unlimited tracks" is fine in customer copy. The 3 a day limit is fair use and is covered in the terms, so don't flag the wording again.
+
+## 7 November 2026 (evening)
+- Website Orders webhook was replaced in late October (new hook 3975267). Etsy Orders 7001679, TEST 7881500, Etsy Consent 7554991 and Gift Redemption 6793811 still posted to the old, deleted hook (410 Gone), so no Etsy or gift-redemption order could reach the pipeline. All four now use the new hook. Pipeline Watchdog 6798905 now checks hook 3975267. If Website Orders' hook is ever changed again, search every scenario for the old URL.
+- News listings 4611639286 (4 hours, "Doomscrolling Before Bed") and 4611640378 (10 minutes, "Break From the News") added to every listing_id switch in Etsy Orders and TEST (is_xmas, occ thinking, occ_word brief that never mentions the news, focus_label "A break from the news", duration, consent wording). Both published.
+- Etsy consent email (module 42) now uses is_gift only, so self-buyers on occasion listings get 'your track' and the health wording that matches the consent record.
+- Gift instruction in Website Orders module 14 and Risk-3 Release module 22 now ends with a self-check against she/he/their and name-with-'s lines.
+- Tested end to end with fake receipts 9000000101 to 9000000105 and gift code TESTREDEEM7NOV (all cleaned up). Clear about -19 LUFS, whispered -40, 4 hour track 14400 s.
