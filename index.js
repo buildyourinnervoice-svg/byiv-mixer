@@ -681,6 +681,11 @@ app.post('/create-checkout', async (req, res) => {
       recipient_email: String(o.recipient_email || '').slice(0, 200),
       buyer_name: String(o.buyer_name || '').slice(0, 100)
     };
+    // Partner code (added 17 Nov 2026): a partner earns 15% on one-off purchases.
+    // The daily Make scenario 8501023 reads client_reference_id P-CODE from completed
+    // checkouts, and the monthly statement reads the payment from the Stripe customer.
+    const partnerCode = String(o.partner_code || '').toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 30);
+    if (partnerCode) md.partner_code = partnerCode;
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],
@@ -696,6 +701,7 @@ app.post('/create-checkout', async (req, res) => {
         quantity: 1
       }],
       metadata: md,
+      ...(partnerCode ? { client_reference_id: 'P-' + partnerCode, customer_creation: 'always' } : {}),
       success_url: `${SITE_URL}/?paid=1`,
       cancel_url: `${SITE_URL}/?canceled=1`
     });
