@@ -68,11 +68,20 @@ function isGift(o) {
   return String(o.who_for || '').toLowerCase().indexOf('gift') !== -1 ||
          !!(o.recipient_email || o.recipient_name);
 }
+// Cyber Week sale (added 18 Nov 2026): 50% off every personalised track from
+// midnight UK time on 23 Nov 2026 to the end of 1 Dec 2026 (UK is on GMT, so the
+// UTC times below are UK midnight). Switches on and off by itself; no redeploy.
+const SALE_STARTS = Date.parse('2026-11-23T00:00:00Z');
+const SALE_ENDS = Date.parse('2026-12-02T00:00:00Z');
+function inSale(now) { const t = now === undefined ? Date.now() : now; return t >= SALE_STARTS && t < SALE_ENDS; }
 function computePrice(o) {
   const base = PRICE[o.duration];
   if (base === undefined) return null;            // unknown duration
   const member = isMember(o.member);
   const gift = isGift(o);
+  // During the sale everyone pays half the normal price (members still get
+  // their own tracks free; a member's gift drops from 30% off to 50% off).
+  if (inSale()) return (member && !gift) ? 0 : round2(base * 0.5);
   if (!member) return base;                        // non-member: base
   if (gift) return round2(base * 0.7);             // member gift: 30% off
   return 0; // member own track (any length incl. 4hr): free — fair use applies
@@ -686,15 +695,16 @@ app.post('/create-checkout', async (req, res) => {
     // checkouts, and the monthly statement reads the payment from the Stripe customer.
     const partnerCode = String(o.partner_code || '').toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 30);
     if (partnerCode) md.partner_code = partnerCode;
+    if (inSale()) md.sale = 'CYBER50';
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],
       line_items: [{
         price_data: {
           currency: 'gbp',
-          unit_amount: price * 100,
+          unit_amount: Math.round(price * 100),
           product_data: {
-            name: `Personalised ${o.duration} affirmations track`,
+            name: `Personalised ${o.duration} affirmations track${inSale() ? ' (50% off, Cyber Week)' : ''}`,
             description: (o.focus ? `Focus: ${o.focus}` : 'Build Your Inner Voice')
           }
         },
