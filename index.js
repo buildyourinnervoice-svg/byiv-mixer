@@ -414,7 +414,7 @@ function savePromoUses(uses) {
   });
 }
 // ---- General-purpose codes (added 28 Aug 2026): any code -> one free track,
-// any length, redeemable once per email. Stored as a dict on Bunny storage so
+// any length. Since 24 Nov 2026 every use counts towards 'max', whoever uses it. Stored as a dict on Bunny storage so
 // new codes can be added just by editing that one JSON file — no redeploy.
 // Shape: { "CODE": { "max": 1, "uses": [ { "email": "...", "at": "..." } ] } }
 const CODES_FILE = 'promo-codes.json';
@@ -640,7 +640,7 @@ app.post('/create-checkout', async (req, res) => {
     // capped at 10 unique redemptions, ledger on Bunny storage. Same email
     // re-using the code doesn't burn an extra slot.
     // ---- General codes (added 28 Aug 2026): any code in promo-codes.json on
-    // Bunny storage -> one free track of any length, once per email. Add new
+    // Bunny storage -> one free track of any length per use, up to its max. Add new
     // codes anytime by editing that file — no code change or redeploy needed.
     let finalPrice = price;
     const promo = String(o.promo_code || '').trim().toUpperCase();
@@ -657,9 +657,13 @@ app.post('/create-checkout', async (req, res) => {
         const codes = await getPromoCodes();
         const entry = codes[promo];
         if (!entry) return res.status(400).json({ error: "That code isn't recognised — please check it and try again." });
-        const already = entry.uses.some(u => String(u.email || '').toLowerCase() === pEmail.toLowerCase());
-        if (!already && entry.uses.length >= entry.max) return res.status(403).json({ error: 'This code has now been fully redeemed.' });
-        if (!already) { entry.uses.push({ email: pEmail, at: new Date().toISOString() }); await savePromoCodes(codes); }
+        // 24 Nov 2026: every redemption now counts, even from the same email.
+        // Before this, an email that had used a code once could reuse it for
+        // free without limit, so 'max' only capped how many different people
+        // used it. A code with max 6 now gives exactly 6 free tracks in total.
+        if (entry.uses.length >= entry.max) return res.status(403).json({ error: 'This code has now been fully redeemed.' });
+        entry.uses.push({ email: pEmail, at: new Date().toISOString() });
+        await savePromoCodes(codes);
         finalPrice = 0;
       }
     }
